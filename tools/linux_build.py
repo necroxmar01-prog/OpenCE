@@ -672,6 +672,25 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
                 variables={"ldflags": " ".join(["--target=i686-linux-gnu", "-m32", "-no-pie", "-g", *sysroot_ldflags,
                                                 *extra_ldflags])},
             )
+            # an addon grafted onto a level as the game grafts it
+            # (tools/addon_check.c, port/linux/game/addon_graft.c)
+            addon_tool = Path("tools/addon_check.c")
+            addon_tool_object = obj_dir / addon_tool.with_suffix(".o")
+            n.build(
+                outputs=addon_tool_object,
+                rule="linux_cc",
+                inputs=addon_tool,
+                implicit=sysroot_inputs,
+                variables={"cflags": " ".join([posix_cflags, f"-I{ZLIB_DIR}", *ZLIB_DEFINES, posix_extra])},
+            )
+            n.build(
+                outputs=validator.parent / "addon_check",
+                rule="linux_tool_link",
+                inputs=[addon_tool_object, obj_dir / (game_dir / "addon_graft.o"),
+                        *(item for item in tool_objects[1:] if "cache_file_formats" not in str(item))],
+                variables={"ldflags": " ".join(["--target=i686-linux-gnu", "-m32", "-no-pie", "-g", *sysroot_ldflags,
+                                                *extra_ldflags])},
+            )
 
     # Profile-guided optimisation: with the committed profile, or with
     # --pgo=train one that an instrumented build records while playing
@@ -699,5 +718,5 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
     brokers = build_dir / "brokers.txt"
     n.build(outputs=brokers, rule="linux_copy", inputs=Path("port/assets/network/brokers.txt"))
     n.build(outputs="linux", rule="phony",
-            inputs=[output, brokers, validator, *sdl_outputs])
+            inputs=[output, brokers, validator, validator.parent / "addon_check", *sdl_outputs])
     n.newline()

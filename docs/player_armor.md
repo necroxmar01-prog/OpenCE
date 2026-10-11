@@ -39,10 +39,12 @@ permutation = helmet odst
 | `biped` | The biped tag to spawn as. Without one, the level's Spartan. |
 | `color` | `profile` (the default) or `tag`. |
 | `permutation` | `<region> <permutation>` of the unit's model, up to 8 lines. |
+| `addon` | An addon that brings the biped to every campaign level (`d:\addons\<addon>.map`): [addons.md](addons.md). |
 
 An armor whose biped the loaded level has not got is listed as `(NOT HERE)`,
 and the level's Spartan spawns instead (`debug.txt` says so). The armor's
-tags must be in the level's cache file: the list only names them.
+tags must be in the level's cache file, or come with an addon, which the
+game grafts onto each campaign level as it loads ([addons.md](addons.md)).
 
 ## When it applies
 

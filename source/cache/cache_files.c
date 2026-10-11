@@ -615,6 +615,13 @@ void scenario_tags_unload(
 
 		menu_tags_unloaded();
 	}
+	/* port: the armor addon's tags go too, and its buffers, memory and file
+	(port/linux/game/addon_tags.c): after the texture and sound caches */
+	{
+		extern void addon_tags_unloaded(void);
+
+		addon_tags_unloaded();
+	}
 	cache_file_close();
 	/* port: a Halo Custom Edition map has no Xbox vertex or index buffers
 	(port/linux/game/custom_edition_cache.c) */
@@ -1222,6 +1229,14 @@ long scenario_tags_load(
 		tag_cache_base_address = physical_memory_get_tag_cache_base_address();
 		if (cache_file_header_verify(&cache_file_globals.header, scenario_name, TRUE))
 		{
+			/* port: a campaign level's armor addon (player_armor.c) read and
+			checked first, where the level's tags go, then moved aside
+			(port/linux/game/addon_tags.c); the header's map type is at 0x60 */
+			{
+				extern boolean addon_tags_prepare(void *tag_cache, short map_type);
+
+				addon_tags_prepare(tag_cache_base_address, *(short *)cache_file_globals.header.reserved60);
+			}
 			csmemset(tag_cache_base_address, 0xCD, 0x01600000);
 			cache_file_read(
 				NONE,
@@ -1240,6 +1255,9 @@ long scenario_tags_load(
 			is wrong is, and closed for the next to open */
 			if (read_complete != TRUE)
 			{
+				extern void addon_tags_unloaded(void);
+
+				addon_tags_unloaded();
 				error(_error_silent, "the cache file '%s' could not be read", scenario_name);
 				cache_file_close();
 
@@ -1250,6 +1268,9 @@ long scenario_tags_load(
 				cache_file_globals.header.tag_data_size,
 				scenario_name))
 			{
+				extern void addon_tags_unloaded(void);
+
+				addon_tags_unloaded();
 				cache_file_close();
 
 				return NONE;
@@ -1264,6 +1285,9 @@ long scenario_tags_load(
 				cache_file_globals.header.file_length,
 				scenario_name))
 			{
+				extern void addon_tags_unloaded(void);
+
+				addon_tags_unloaded();
 				cache_file_close();
 
 				return NONE;
@@ -1289,6 +1313,13 @@ long scenario_tags_load(
 			global_tag_count = cache_file_globals.tag_header->tag_count;
 			tags_header_register_vertex_and_index_buffers(cache_file_globals.tag_header);
 			cache_file_globals.tags_loaded = TRUE;
+			/* port: the armor addon's tags added to the level's
+			(port/linux/game/addon_tags.c), before anything copies the table */
+			{
+				extern void addon_tags_loaded(void);
+
+				addon_tags_loaded();
+			}
 			/* port: a PAL map played as the NTSC maps are (port/linux/game/pal_tags.c) */
 			{
 				extern void pal_tags_loaded(char const *build);

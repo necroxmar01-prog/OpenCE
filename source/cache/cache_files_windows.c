@@ -866,6 +866,18 @@ short cache_file_read(
 
 		return request_index;
 	}
+	/* port: an armor addon's pixels and samples, past the level's file, are
+	served from the addon at once (port/linux/game/addon_tags.c) */
+	{
+		extern boolean addon_tags_read(long offset, long size, void *buffer);
+
+		if (addon_tags_read(offset, size, buffer))
+		{
+			*completion_flag_reference = TRUE;
+
+			return request_index;
+		}
+	}
 	match_assert(
 		"c:\\halo\\SOURCE\\cache\\cache_files_windows.c",
 		269,

@@ -22,6 +22,10 @@ boolean player_armor_available(short armor);
 short player_armor_selected(void);
 void player_armor_select(short armor);
 
+/* (addon_tags.c, as a level loads) the addon of the armor chosen and the
+biped it brings, if it has one */
+boolean player_armor_addon(char *addon, long addon_size, char *biped, long biped_size);
+
 /* (player_spawn, players.c) the unit a local campaign player spawns as,
 given the map's own, and what the armor changes on it once made */
 long player_armor_unit_definition(short local_player_index, long default_definition_index);

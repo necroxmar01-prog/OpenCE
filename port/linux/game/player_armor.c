@@ -28,6 +28,9 @@ of "key = value", '#' or ';' starting a comment:
 - biped: the biped tag to spawn as; none for the map's Spartan. An armor
   whose biped the loaded map has not is listed as not in this map, and the
   map's Spartan spawns instead;
+- addon: the addon that brings the biped to every campaign level
+  (d:\addons\<addon>.map, a map built with Invader's -g xbox-ntsc whose
+  scenario names the biped: addon_tags.c grafts it as the level loads);
 - color: "profile" (the default) or "tag";
 - permutation: a region of the unit's model and the permutation it shows,
   any number of them (up to PLAYER_ARMOR_MAXIMUM_PERMUTATIONS).
@@ -103,6 +106,9 @@ struct player_armor
 	wchar_t description[PLAYER_ARMOR_DESCRIPTION_LENGTH];
 	/* the biped's tag; empty: the map's Spartan */
 	char biped[PLAYER_ARMOR_TAG_LENGTH];
+	/* the addon that brings the biped to the campaign's levels
+	(d:\addons\<addon>.map: addon_tags.c); empty: the levels have it, or not */
+	char addon[PLAYER_ARMOR_ID_LENGTH];
 	short color;
 	short permutation_count;
 	struct player_armor_permutation permutations[PLAYER_ARMOR_MAXIMUM_PERMUTATIONS];
@@ -231,6 +237,10 @@ static boolean armor_read(char const *id, struct player_armor *armor)
 		else if (!_stricmp(key, "biped"))
 		{
 			armor_copy(armor->biped, value, sizeof(armor->biped));
+		}
+		else if (!_stricmp(key, "addon"))
+		{
+			armor_copy(armor->addon, value, sizeof(armor->addon));
 		}
 		else if (!_stricmp(key, "color"))
 		{
@@ -594,6 +604,7 @@ long player_armor_unit_definition(
 			armor->biped);
 		return default_definition_index;
 	}
+	error(_error_silent, "armor %s: player %d spawns as %s", armor->id, local_player_index, armor->biped);
 	return biped_index;
 }
 
@@ -604,4 +615,19 @@ void player_armor_unit_created(
 	if (!armor_applies(local_player_index) || unit_index == NONE)
 		return;
 	armor_dress_unit(armor_get(player_armor_selected()), local_player_index, unit_index);
+}
+
+boolean player_armor_addon(
+	char *addon,
+	long addon_size,
+	char *biped,
+	long biped_size)
+{
+	struct player_armor const *armor = armor_get(player_armor_selected());
+
+	if (!armor->addon[0] || !armor->biped[0] || addon_size <= 0 || biped_size <= 0)
+		return FALSE;
+	armor_copy(addon, armor->addon, (size_t)addon_size);
+	armor_copy(biped, armor->biped, (size_t)biped_size);
+	return TRUE;
 }
