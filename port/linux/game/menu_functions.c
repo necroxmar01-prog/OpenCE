@@ -82,6 +82,7 @@ their handlers open opens.
 #include "custom_edition_cache.h"
 #include "custom_edition_maps.h"
 #include "network_voice.h"
+#include "player_armor.h"
 #include "text/draw_string.h"
 /* (internet play's server browser: the platform layer's) */
 #include "../src/p2p.h"
@@ -1614,6 +1615,90 @@ static boolean color_choose(void)
 	if (!profile)
 		return FALSE;
 	profile->primary_color_index = color_list.color;
+	return TRUE;
+}
+
+/* ---------- Armor (Change Color's ARMOR): the campaign Spartan's armors
+(player_armor.c), a list like Change Color's, with the armor's words beside
+it; one the loaded level has not is marked, and the level's Spartan is worn
+instead. The armor chosen is worn from the next mission on. */
+
+#define ARMOR_ROWS 11
+#define ARMOR_DESCRIPTION_LENGTH 256
+
+static struct
+{
+	/* the armor on the first row, and the armor chosen */
+	short first;
+	short armor;
+} armor_list;
+
+static void armor_row_text(short row, wchar_t *text)
+{
+	static wchar_t const missing[] = L" (NOT HERE)";
+	short armor = (short)(armor_list.first + row);
+	short length;
+
+	player_armor_name(armor, text, ROW_TEXT_LENGTH);
+	length = (short)ustrlen(text);
+	if (armor == player_armor_selected() && length < ROW_TEXT_LENGTH - 3)
+	{
+		/* (the armor worn, as the profile list marks the profile in use) */
+		csmemmove(text + 2, text, (length + 1) * sizeof(wchar_t));
+		text[0] = '*';
+		text[1] = ' ';
+		length += 2;
+	}
+	if (!player_armor_available(armor) && length + (short)NUMBEROF(missing) <= ROW_TEXT_LENGTH)
+		ustrncpy(text + length, missing, NUMBEROF(missing));
+}
+
+/* "port armor list initialize": the armors read again, on the one worn */
+static boolean armor_list_initialize(struct widget_instance *list)
+{
+	short count;
+
+	player_armor_catalog_load();
+	count = player_armor_count();
+	armor_list.armor = player_armor_selected();
+	armor_list.first = (short)PIN(armor_list.armor - ARMOR_ROWS / 2, 0, MAX(count - ARMOR_ROWS, 0));
+	focus_row(list, (short)(armor_list.armor - armor_list.first));
+	return TRUE;
+}
+
+/* "port armor list update": the list scrolled on at its ends, the armor's
+words */
+static void armor_list_update(struct widget_instance *list)
+{
+	struct widget_instance *description = list->parameters.list.extended_description;
+	short count = player_armor_count();
+	short rows = MIN(count, ARMOR_ROWS);
+	short armor = list_scroll(list, &armor_list.first, count, rows);
+
+	if (armor != NONE)
+		armor_list.armor = armor;
+	rows_update(list, rows, armor_row_text);
+	{
+		static wchar_t const missing[] = L"\n\nThis level has not got this\narmor: the level's Spartan is\nworn instead.";
+		wchar_t text[ARMOR_DESCRIPTION_LENGTH];
+		short length;
+
+		player_armor_description(armor_list.armor, text, ARMOR_DESCRIPTION_LENGTH);
+		length = (short)ustrlen(text);
+		if (!player_armor_available(armor_list.armor) &&
+			length + (short)NUMBEROF(missing) <= ARMOR_DESCRIPTION_LENGTH)
+		{
+			ustrncpy(text + length, missing, NUMBEROF(missing));
+		}
+		text_set_length(named(description, "armor_desc", 0), text, ARMOR_DESCRIPTION_LENGTH);
+	}
+	profile_name_show(description);
+}
+
+/* "port armor select": the armor chosen, worn from the next mission on */
+static boolean armor_choose(void)
+{
+	player_armor_select(armor_list.armor);
 	return TRUE;
 }
 
@@ -5685,6 +5770,14 @@ boolean pc_menu_event_function_invoke(
 		{
 			return color_choose();
 		}
+		else if (!strcmp(name, "port armor list initialize"))
+		{
+			return armor_list_initialize(widget);
+		}
+		else if (!strcmp(name, "port armor select"))
+		{
+			return armor_choose();
+		}
 		else if (!strcmp(name, "controls binding slot"))
 		{
 			controls_screen.slot = (short)!controls_screen.slot;
@@ -5785,6 +5878,8 @@ void pc_menu_game_data_function_invoke(
 		controls_update(widget);
 	else if (!strcmp(name, "color picker update"))
 		color_list_update(widget);
+	else if (!strcmp(name, "port armor list update"))
+		armor_list_update(widget);
 	else if (!strcmp(name, "3wide player profile list update"))
 		profile_list_update(widget);
 	else if (!strcmp(name, "load game list update"))

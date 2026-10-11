@@ -11,6 +11,7 @@
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/color_edit/color_select_button_bar" type="column_list" width="640" height="28" flags="pass_unhandled_to_focused_child left_right_tabs_items">
 		<data input="common button bar update"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_button" x="250" y="1"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/color_edit/color_select_button_ok" x="380" y="1"/>
 		<child widget="common_button_back" x="510" y="1"/>
 	</widget>

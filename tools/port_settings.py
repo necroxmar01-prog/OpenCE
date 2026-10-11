@@ -296,7 +296,7 @@ STRING_OVERRIDES = {
         "Adjust the volume of the music\\nand of everything else.\\n\\nProfile:",
         "Choose a window or the full\\nscreen, the frame rate and more.\\n\\nProfile:",
         "Internet play, updates and the\\nmultiplayer HUD.\\n\\nProfile:",
-        "Change the current profile's\\nfree-for-all multiplayer color.\\n\\nProfile:",
+        "This profile's multiplayer color,\\nand the campaign's armor.\\n\\nProfile:",
         "Halo: Combat Evolved, the Xbox\\ngame, on this computer.\\n\\nProfile:",
     ],
 }
@@ -502,12 +502,64 @@ def _controls_screen() -> list:
                    extra)
 
 
+# the campaign Spartan's armor (port/linux/game/player_armor.c): Change
+# Color's ARMOR button opens a list of the armors, as Change Color lists the
+# colours; the armor chosen is worn when the next mission starts
+ARMOR = f"{PE}/armor_edit"
+
+
+def _armor_screen() -> list:
+    """ARMOR: the armors (the game's two, then the data root's armors
+    folder's), the one chosen marked; its OK, or an armor chosen, keeps it for
+    the next mission (menu_functions.c's armor list)"""
+    lines = _widget(f"{ARMOR}/armor_button",
+                    [("type", "text"), ("width", 128), ("height", 24), ("bitmap", "bitmaps/text_button_background"),
+                     ("string_list", f"{ARMOR}/armor_button_caption"), ("font", "ui\\small_ui"),
+                     ("color", "#FFFFFFFF"), ("align", "center"), ("text_y", 2)],
+                    [f'<on event="a" open="{ARMOR}/armor_select_screen"/>',
+                     f'<on event="start" open="{ARMOR}/armor_select_screen"/>',
+                     '<on event="left_mouse" run="mouse emit accept event"/>'])
+    lines += _strings(f"{ARMOR}/armor_button_caption", ["ARMOR"])
+    lines += _widget(f"{ARMOR}/armor_select_screen", [("width", 640), ("height", 480),
+                                                      ("flags", "pass_unhandled_to_focused_child pause_game"),
+                                                      ("bitmap", "bitmaps/gradient")],
+                     ['<child widget="main_menu/new_select/sel_list_desc_bkd"/>',
+                      f'<child widget="{ARMOR}/armor_select_list"/>',
+                      f'<child widget="{ARMOR}/header_armor"/>'])
+    lines += _header(f"{ARMOR}/header_armor", f"{ARMOR}/header_armor")
+    rows = [f'<child widget="main_menu/new_select/list_item_{index}" x="20" y="{73 + 30 * index}"/>'
+            for index in range(11)]
+    lines += _widget(f"{ARMOR}/armor_select_list",
+                     [("type", "column_list"), ("width", 640), ("height", 480),
+                      ("flags", "pass_unhandled_to_focused_child up_down_tabs_children"),
+                      ("description", f"{ARMOR}/armor_select_extended_desc")],
+                     ['<data input="port armor list update"/>',
+                      '<on event="created" run="port armor list initialize"/>',
+                      '<on event="custom_activation" run="port armor select" back="true"/>',
+                      *rows, f'<child widget="{ARMOR}/armor_button_bar" y="414"/>'])
+    lines += _widget(f"{ARMOR}/armor_select_extended_desc", [("width", 640), ("height", 480)],
+                     ['<child widget="main_menu/current_profile_name"/>',
+                      f'<child widget="{ARMOR}/armor_desc"/>'])
+    lines += _widget(f"{ARMOR}/armor_desc", [("type", "text"), ("controller", 1), ("left", 412), ("top", 85),
+                                             ("width", 216), ("height", 380), ("font", "ui\\small_ui"),
+                                             ("color", "#FF2896FF"), ("text_flags", "no_focus_test")], [])
+    lines += _widget(f"{ARMOR}/armor_button_bar", [("type", "column_list"), ("width", 640), ("height", 28),
+                                                   ("flags", "pass_unhandled_to_focused_child left_right_tabs_items")],
+                     ['<data input="common button bar update"/>',
+                      f'<child widget="{ARMOR}/armor_button_ok" x="380" y="1"/>',
+                      '<child widget="common_button_back" x="510" y="1"/>'])
+    lines += _button(f"{ARMOR}/armor_button_ok", 1, ['<on event="a" run="emit custom activation event"/>',
+                                                     '<on event="start" run="emit custom activation event"/>'])
+    return lines
+
+
 def settings_files() -> dict:
     """the files of the port's screens, by their names in ce/"""
     files = {}
     for folder, spec in SCREENS.items():
         files[f"{PE}/{folder}".replace("/", ".") + ".xml"] = _setting_screen(folder, spec)
     files[f"{PE}/controls_setup".replace("/", ".") + ".xml"] = _controls_screen()
+    files[ARMOR.replace("/", ".") + ".port.xml"] = _armor_screen()
     return {name: ['<?xml version="1.0" encoding="UTF-8"?>',
                    "<!-- The port's settings screen, in the PC version's style (tools/port_settings.py) -->",
                    "<menus>", *lines, "</menus>", ""] for name, lines in files.items()}
@@ -622,6 +674,10 @@ WIDGET_PATCHES = {
     # button settings, BITMAP_FRAMES; menu_functions.c's
     # profile_gamepad_layout)
     f"{PE}/profile_edit_extended_desc_pic": {"inputs": ["port gamepad layout preview"]},
+    # (Change Color's ARMOR, before its OK: _armor_screen)
+    f"{PE}/color_edit/color_select_button_bar": {"insert_before": {
+        f"{PE}/color_edit/color_select_button_ok": [f'<child widget="{PE}/armor_edit/armor_button" x="250" y="1"/>'],
+    }},
     # (straight to their screens: no "checking for updates" dialog, which
     # asked the PC version's servers)
     f"{MT}/multiplayer_type_join_internet_item": {"set": {"string_index": 6}, "handlers": [
@@ -726,6 +782,7 @@ TITLES = {
     f"{MT}/lobby/header_lobby": "GAME LOBBY",
     f"{MT}/coop/header_player_2": "PLAYER 2 PROFILE",
     f"{MT}/lobby/header_add_player": "ADD PLAYER",
+    f"{PE}/armor_edit/header_armor": "SPARTAN ARMOR",
 }
 
 

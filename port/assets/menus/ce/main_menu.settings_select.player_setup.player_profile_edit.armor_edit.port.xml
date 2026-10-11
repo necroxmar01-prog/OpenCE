@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The port's settings screen, in the PC version's style (tools/port_settings.py) -->
+<menus>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_button" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" string_list="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_button_caption" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" open="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_select_screen"/>
+		<on event="start" open="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_select_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<strings name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_button_caption">
+		<string text="ARMOR"/>
+	</strings>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_select_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
+		<child widget="main_menu/new_select/sel_list_desc_bkd"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_select_list"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/header_armor"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/header_armor" controller="1" left="35" top="11" width="363" height="59" bitmap="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/header_armor">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_select_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_select_extended_desc">
+		<data input="port armor list update"/>
+		<on event="created" run="port armor list initialize"/>
+		<on event="custom_activation" run="port armor select" back="true"/>
+		<child widget="main_menu/new_select/list_item_0" x="20" y="73"/>
+		<child widget="main_menu/new_select/list_item_1" x="20" y="103"/>
+		<child widget="main_menu/new_select/list_item_2" x="20" y="133"/>
+		<child widget="main_menu/new_select/list_item_3" x="20" y="163"/>
+		<child widget="main_menu/new_select/list_item_4" x="20" y="193"/>
+		<child widget="main_menu/new_select/list_item_5" x="20" y="223"/>
+		<child widget="main_menu/new_select/list_item_6" x="20" y="253"/>
+		<child widget="main_menu/new_select/list_item_7" x="20" y="283"/>
+		<child widget="main_menu/new_select/list_item_8" x="20" y="313"/>
+		<child widget="main_menu/new_select/list_item_9" x="20" y="343"/>
+		<child widget="main_menu/new_select/list_item_10" x="20" y="373"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_button_bar" y="414"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_select_extended_desc" width="640" height="480">
+		<child widget="main_menu/current_profile_name"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_desc"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_desc" type="text" controller="1" left="412" top="85" width="216" height="380" font="ui\small_ui" color="#FF2896FF" text_flags="no_focus_test">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_button_bar" type="column_list" width="640" height="28" flags="pass_unhandled_to_focused_child left_right_tabs_items">
+		<data input="common button bar update"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_button_ok" x="380" y="1"/>
+		<child widget="common_button_back" x="510" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_button_ok" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" string_list="strings/common_button_captions" string_index="1" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" run="emit custom activation event"/>
+		<on event="start" run="emit custom activation event"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+</menus>

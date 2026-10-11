@@ -387,6 +387,8 @@ static char const *const port_function_names[] =
 	/* (a new profile's screens: Settings' is then being edited, which the
 	Xbox's leaves to its own screens) */
 	"new campaign decision",
+	/* (Change Color's ARMOR: the campaign Spartan's armor, player_armor.c) */
+	"port armor list initialize", "port armor select",
 };
 
 /* the PC version's game data functions that the Xbox's have not, from
@@ -408,6 +410,8 @@ static char const *const port_game_data_input_names[] =
 	/* (the profile settings' picture: the Xbox's of the button settings,
 	on Gamepad Setup's row) */
 	"port gamepad layout preview",
+	/* (ARMOR's list: menu_functions.c's armor list) */
+	"port armor list update",
 };
 
 static struct

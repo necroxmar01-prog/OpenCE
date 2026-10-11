@@ -237,6 +237,7 @@ symbols in this file:
 #include "data.h"
 #include "devices/devices.h"
 #include "network_coop.h" /* port: port/linux/game/network_coop.c */
+#include "player_armor.h" /* port: port/linux/game/player_armor.c */
 #include "cutscene/cinematics.h" /* port: network co-op's first spawns */
 #include "editor/editor_stubs.h"
 #include "effects/effects.h"
@@ -1450,6 +1451,11 @@ static void player_spawn(
 				else
 				{
 					unit_definition_index = player_information->player_unit.index;
+					/* port: the armor chosen in the menus, in a campaign game
+					on this machine alone (player_armor.c) */
+					unit_definition_index = player_armor_unit_definition(
+						player->local_player_index,
+						unit_definition_index);
 				}
 
 				object_placement_data_new(
@@ -1470,6 +1476,9 @@ static void player_spawn(
 				unit_index = object_new(&placement_data);
 				if (unit_index != NONE && network_coop_active())
 					players_coop_color_unit(unit_index, &change_color);
+				/* port: the armor's regions and colour (player_armor.c) */
+				if (unit_index != NONE && !game_engine_running())
+					player_armor_unit_created(player->local_player_index, unit_index);
 				if (unit_index != NONE)
 				{
 					unit = unit_try_and_get(unit_index);

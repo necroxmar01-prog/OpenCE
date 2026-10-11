@@ -1,0 +1,30 @@
+/*
+PLAYER_ARMOR.H
+
+The campaign Spartan's armor, chosen in the menus (Settings > Change Color >
+ARMOR, before a mission): player_armor.c.
+*/
+
+#ifndef __PLAYER_ARMOR_H
+#define __PLAYER_ARMOR_H
+
+/* the armors: the game's own two, then those of the data root's armors
+folder (d:\armors\*.txt), read again by player_armor_catalog_load */
+void player_armor_catalog_load(void);
+short player_armor_count(void);
+void player_armor_name(short armor, wchar_t *text, short length);
+void player_armor_description(short armor, wchar_t *text, short length);
+/* whether the loaded campaign level has the armor's biped (TRUE outside
+one, as in the main menu: it is checked when a level loads) */
+boolean player_armor_available(short armor);
+
+/* the armor chosen, kept in the saves (u:\armor.txt) */
+short player_armor_selected(void);
+void player_armor_select(short armor);
+
+/* (player_spawn, players.c) the unit a local campaign player spawns as,
+given the map's own, and what the armor changes on it once made */
+long player_armor_unit_definition(short local_player_index, long default_definition_index);
+void player_armor_unit_created(short local_player_index, long unit_index);
+
+#endif
