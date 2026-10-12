@@ -44,6 +44,14 @@ already in play is left as it is.
 
 The choice is the machine's, kept in the saves (u:\armor.txt: the armor's
 id), for every profile.
+
+A saved game goes on with the player it saved: one saved in the map's
+Spartan (before the armor was chosen, or before armors were) is loaded
+(game_state.c lets it, its objects fitting the level with the armor's
+addon), and the player is then put in the armor chosen
+(player_armor_game_state_loaded), as soon as they are on foot, alive and
+out of a cinematic: a unit of the armor in the Spartan's place, with its
+weapons, grenades, health and shields.
 */
 
 #include "cseries.h"
@@ -52,6 +60,7 @@ id), for every profile.
 #include "game/game_globals.h"
 #include "game/game_engine.h"
 #include "game/players.h"
+#include "cutscene/cinematics.h"
 #include "interface/player_ui.h"
 #include "items/weapons.h"
 #include "models/model_definitions.h"
@@ -123,7 +132,10 @@ static struct
 	struct player_armor armors[PLAYER_ARMOR_MAXIMUM_ARMORS];
 	/* the armor chosen (NONE: not read from the saves yet) */
 	short selected;
-} player_armor_globals = { FALSE, 0, { { { 0 } } }, NONE };
+	/* the local players of a saved game just loaded, to be put in the armor
+	chosen (player_armor_update) */
+	boolean dress_loaded[MAXIMUM_NUMBER_OF_LOCAL_PLAYERS];
+} player_armor_globals = { FALSE, 0, { { { 0 } } }, NONE, { 0 } };
 
 /* ---------- private code */
 
@@ -612,6 +624,8 @@ void player_armor_unit_created(
 	short local_player_index,
 	long unit_index)
 {
+	if (local_player_index >= 0 && local_player_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS)
+		player_armor_globals.dress_loaded[local_player_index] = FALSE;
 	if (!armor_applies(local_player_index) || unit_index == NONE)
 		return;
 	armor_dress_unit(armor_get(player_armor_selected()), local_player_index, unit_index);
@@ -630,4 +644,102 @@ boolean player_armor_addon(
 	armor_copy(addon, armor->addon, (size_t)addon_size);
 	armor_copy(biped, armor->biped, (size_t)biped_size);
 	return TRUE;
+}
+
+void player_armor_game_state_loaded(
+	void)
+{
+	short local_player_index;
+
+	for (local_player_index = 0; local_player_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS; local_player_index++)
+		player_armor_globals.dress_loaded[local_player_index] = TRUE;
+}
+
+/* the player's unit (saved in another) given the armor's place: a unit of
+the armor where it is, facing as it faces, with its weapons, grenades,
+health and shields, then the old one deleted; FALSE if not now (in a
+vehicle, dead, in a cinematic: tried again) */
+static boolean armor_dress_loaded_player(
+	struct player_armor const *armor,
+	short local_player_index,
+	long biped_index)
+{
+	long player_index = local_player_get_player_index(local_player_index);
+	struct player_datum *player;
+	struct unit_datum *old_unit;
+	struct unit_datum *new_unit;
+	struct object_placement_data placement;
+	long old_unit_index;
+	long new_unit_index;
+
+	if (player_index == NONE)
+		return TRUE;
+	player = player_get(player_index);
+	old_unit_index = player->unit_index;
+	if (old_unit_index == NONE)
+		return FALSE;
+	old_unit = unit_get(old_unit_index);
+	if (old_unit->definition_index == biped_index)
+		return TRUE;
+	if (old_unit->object.parent_object_index != NONE || TEST_FLAG(old_unit->object.damage_flags, _object_dead_bit) ||
+		cinematic_in_progress() || old_unit->unit.grenade_throw_state != 0)
+	{
+		return FALSE;
+	}
+
+	object_placement_data_new(&placement, biped_index, NONE);
+	placement.position = old_unit->object.position;
+	placement.forward = old_unit->object.forward;
+	placement.up = old_unit->object.up;
+	placement.translational_velocity = old_unit->object.translational_velocity;
+	csmemcpy(placement.change_colors, old_unit->object.base_change_colors, sizeof(placement.change_colors));
+	new_unit_index = object_new(&placement);
+	if (new_unit_index == NONE)
+	{
+		error(_error_silent, "armor %s: no room for player %d's unit; the saved one stays", armor->id,
+			local_player_index);
+		return TRUE;
+	}
+	/* (object_new may move the old one in the objects' memory) */
+	old_unit = unit_get(old_unit_index);
+	new_unit = unit_get(new_unit_index);
+	new_unit->object.owner_player_index = old_unit->object.owner_player_index;
+	new_unit->object.owner_team_index = old_unit->object.owner_team_index;
+	new_unit->object.body_vitality = old_unit->object.body_vitality;
+	new_unit->object.shield_vitality = old_unit->object.shield_vitality;
+	new_unit->unit.desired_facing_vector = old_unit->unit.desired_facing_vector;
+	new_unit->unit.desired_aiming_vector = old_unit->unit.desired_aiming_vector;
+	new_unit->unit.aiming_vector = old_unit->unit.aiming_vector;
+	new_unit->unit.desired_looking_vector = old_unit->unit.desired_looking_vector;
+	new_unit->unit.looking_vector = old_unit->unit.looking_vector;
+	new_unit->unit.integrated_light_battery = old_unit->unit.integrated_light_battery;
+	unit_port_move_inventory(old_unit_index, new_unit_index);
+	armor_dress_unit(armor, local_player_index, new_unit_index);
+	error(_error_silent, "armor %s: player %d (as saved, %s) is now %s", armor->id, local_player_index,
+		tag_get_name(old_unit->definition_index), armor->biped);
+	players_set_local_player_unit(local_player_index, new_unit_index);
+	object_delete(old_unit_index);
+	return TRUE;
+}
+
+void player_armor_update(
+	void)
+{
+	short local_player_index;
+
+	for (local_player_index = 0; local_player_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS; local_player_index++)
+	{
+		struct player_armor const *armor;
+		long biped_index;
+
+		if (!player_armor_globals.dress_loaded[local_player_index])
+			continue;
+		armor = armor_get(player_armor_selected());
+		biped_index = armor_biped(armor);
+		if (!armor_applies(local_player_index) || !armor->biped[0] || biped_index == NONE ||
+			armor_dress_loaded_player(armor, local_player_index, biped_index))
+		{
+			player_armor_globals.dress_loaded[local_player_index] = FALSE;
+		}
+	}
 }

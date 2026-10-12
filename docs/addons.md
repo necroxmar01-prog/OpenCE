@@ -151,7 +151,20 @@ network co-op the other machines would run the game's weapon.
 - One armor at a time, the one chosen, and up to eight weapon mods.
 - A weapon mod whose tags have the same names as the game's adds nothing:
   the level's own tags are the ones used.
-- A saved game holds the player's unit by its tag handle: loading a saved
-  game made with another armor (or another addon) is not supported.
+- A saved game names tags by index, so it is loaded only where its
+  objects fit. Each saved game's header records the addons grafted when it
+  was saved (`port_addons`, a signature of them in order, 0 for none;
+  `game_state.c`), and a saved game is taken when:
+  - it was saved with the same addons; or
+  - it was saved with none (every saved game from before the mods) and no
+    weapon mod has replaced a game tag. An armor's addon only adds tags.
+    The player saved in the map's Spartan is then put in the armor chosen
+    once on foot, alive and out of a cinematic, keeping position, weapons,
+    grenades, health and shields (`player_armor_game_state_loaded`).
+
+  Any other saved game is refused (logged) and the level starts over. That
+  covers a game saved with another armor, another weapon mod, or none
+  where a weapon mod is on now: its saved weapons' state would not fit the
+  mod's model.
 - A biped with another animation graph than the level's Spartan's may lack
   animations the level's scripts and cinematics play on the player.

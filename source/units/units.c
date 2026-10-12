@@ -7704,6 +7704,63 @@ short unit_inventory_next_weapon(
 		delta);
 }
 
+/* port: a unit's weapons and grenades given to another that takes its place
+(player_armor.c: a loaded game's player put in the armor chosen), each
+weapon as it is (its rounds, its charge), the one in hand the other's to
+ready; a weapon the other cannot use is let go */
+void unit_port_move_inventory(
+	long from_unit_index,
+	long to_unit_index)
+{
+	struct unit_datum *from = unit_get(from_unit_index);
+	struct unit_datum *to = unit_get(to_unit_index);
+	short in_hand = from->unit.current_weapon_index != NONE ? from->unit.current_weapon_index :
+		from->unit.desired_weapon_index;
+	short ready = NONE;
+	short slot;
+
+	for (slot = 0; slot < MAXIMUM_WEAPONS_PER_UNIT; slot++)
+	{
+		long weapon_index = from->unit.weapon_object_indices[slot];
+		struct item_datum *item;
+		short to_slot;
+
+		if (weapon_index == NONE)
+			continue;
+		from->unit.weapon_object_indices[slot] = NONE;
+		item = item_get(weapon_index);
+		/* (as unit_drop_item takes it out: a weapon put away is not in the
+		map) */
+		if (item->object.parent_object_index == NONE)
+		{
+			object_reconnect_to_map(weapon_index, NULL);
+			object_set_visibility(weapon_index, TRUE);
+			object_attach_to_marker(from_unit_index, "left hand", weapon_index, "");
+		}
+		item_in_unit_inventory(weapon_index, NONE);
+		object_detach(weapon_index);
+		to_slot = unit_first_free_weapon_index(to_unit_index);
+		if (!unit_add_weapon_to_inventory(to_unit_index, weapon_index, _unit_add_weapon_normal))
+		{
+			error(_error_silent, "%s cannot use %s; let go", tag_get_name(to->definition_index),
+				tag_get_name(item->definition_index));
+			object_delete(weapon_index);
+			continue;
+		}
+		if (slot == in_hand || ready == NONE)
+			ready = to_slot;
+	}
+	from->unit.current_weapon_index = NONE;
+	from->unit.desired_weapon_index = NONE;
+	to->unit.desired_weapon_index = ready;
+	csmemcpy(to->unit.grenade_counts, from->unit.grenade_counts, sizeof(to->unit.grenade_counts));
+	csmemset(from->unit.grenade_counts, 0, sizeof(from->unit.grenade_counts));
+	to->unit.current_grenade_index = from->unit.current_grenade_index;
+	to->unit.desired_grenade_index = from->unit.desired_grenade_index;
+
+	return;
+}
+
 boolean unit_drop_current_weapon(
 	long unit_index,
 	boolean immediate)

@@ -122,6 +122,8 @@ symbols in this file:
 #include "lruv_cache.h"
 #include "memory_pool.h"
 #include "cluster_partitions.h"
+#include "addon_tags.h" /* port: port/linux/game/addon_tags.c */
+#include "player_armor.h" /* port: port/linux/game/player_armor.c */
 /* port: object_bounds_cache.c's */
 void object_bounds_cache_invalidate(void);
 
@@ -154,6 +156,8 @@ static void game_state_allocation_record(
 	long size,
 	boolean gpu);
 static void game_state_set_revert_time(
+	void);
+static void game_state_port_stamp_addons(
 	void);
 
 /* ---------- globals */
@@ -207,7 +211,12 @@ static game_state_after_load_proc after_load_procs[] =
 	game_state_set_revert_time,
 	player_control_fix_for_loaded_game_state,
 	director_initialize_for_saved_game,
-	scripted_hud_messages_clear
+	scripted_hud_messages_clear,
+	/* port: the saved game's objects are this level's with its addons now
+	(its later checkpoints say so); a player saved in another armor is
+	given the one chosen (player_armor.c) */
+	game_state_port_stamp_addons,
+	player_armor_game_state_loaded
 };
 
 /* ---------- public code */
@@ -309,8 +318,45 @@ void game_state_initialize_for_new_map(
 	game_state_globals.header->difficulty = game_difficulty_level_get();
 	game_state_globals.header->cache_file_checksum = cache_files_get_checksum();
 	game_state_globals.header->allocation_size_checksum = game_state_globals.allocation_size_checksum;
+	game_state_port_stamp_addons();
 
 	return;
+}
+
+/* port: the header given the addons grafted onto the level
+(addon_tags.c), which its saved games are of */
+static void game_state_port_stamp_addons(
+	void)
+{
+	boolean replaced;
+
+	game_state_globals.header->port_addons = addon_tags_signature(&replaced);
+	game_state_globals.header->port_addons_replaced = replaced;
+
+	return;
+}
+
+/* port: whether a saved game's objects fit the level as its addons have
+made it. Its objects name tags by index, and each addon's tags are added
+after the level's: a game saved with the same addons fits; one saved with
+none fits addons that only add tags (an armor's biped: the player saved is
+given the armor, player_armor.c), not a weapon mod's, whose game weapon's
+data is the mod's now (its saved objects would not fit it); one saved with
+others does not (its tags past the level's would be others or none). */
+static boolean game_state_port_addons_fit(
+	struct game_state_header const *header)
+{
+	boolean replaced;
+	unsigned long addons = addon_tags_signature(&replaced);
+
+	if (header->port_addons == addons)
+		return TRUE;
+	if (!header->port_addons && !replaced)
+		return TRUE;
+	error(_error_silent, "the saved game is not taken: it was saved with other mods (addons %08lx%s; these %08lx%s)",
+		(unsigned long)header->port_addons, header->port_addons_replaced ? " with weapons" : "",
+		addons, replaced ? " with weapons" : "");
+	return FALSE;
 }
 
 void game_state_dispose_from_old_map(
@@ -494,6 +540,11 @@ static boolean game_state_header_valid(
 				FALSE,
 				csprintf(temporary, "checksum from map file doesn't match"));
 		}
+	}
+	else if (!game_state_port_addons_fit(header))
+	{
+		/* (logged: and not halted on, a core's either) */
+		return FALSE;
 	}
 	else
 	{

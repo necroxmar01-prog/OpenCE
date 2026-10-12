@@ -746,6 +746,11 @@ boolean unit_add_weapon_to_inventory(
 boolean unit_add_grenade_to_inventory(
 	long unit_index,
 	long equipment_index);
+/* port: a unit's weapons and grenades given to another that takes its place
+(units.c) */
+void unit_port_move_inventory(
+	long from_unit_index,
+	long to_unit_index);
 short unit_get_weapon_count(
 	long unit_index);
 boolean unit_get_current_flashlight_state(

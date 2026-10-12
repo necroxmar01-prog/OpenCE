@@ -31,4 +31,9 @@ given the map's own, and what the armor changes on it once made */
 long player_armor_unit_definition(short local_player_index, long default_definition_index);
 void player_armor_unit_created(short local_player_index, long unit_index);
 
+/* (game_state.c, a saved game loaded) its local players to be put in the
+armor chosen, by player_armor_update (players.c, each tick) once they can be */
+void player_armor_game_state_loaded(void);
+void player_armor_update(void);
+
 #endif

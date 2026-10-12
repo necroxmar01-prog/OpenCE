@@ -133,6 +133,9 @@ static struct
 	game's) */
 	struct addon_graft_instance *tables[ADDON_TAGS_MAXIMUM_ADDONS];
 	short table_count;
+	/* what was grafted, for saved games (addon_tags_signature) */
+	unsigned long signature;
+	boolean replaced;
 } addon_tags;
 
 /* ---------- private code */
@@ -396,8 +399,30 @@ static void addon_tags_weapon_mod_replace(
 			continue;
 		}
 		table[stock & 0xFFFF].base_address = table[replacing & 0xFFFF].base_address;
+		addon_tags.replaced = TRUE;
 		error(_error_silent, "weapon %s: %s is now %s", mod->id, pair->stock, pair->mod);
 	}
+}
+
+/* the signature of the addons grafted so far with this one: its name, the
+size of its tags and how many it added, in the order grafted (never 0: the
+signature of none) */
+static void addon_tags_sign(
+	struct addon_tags_addon const *addon,
+	long added)
+{
+	unsigned long signature = addon_tags.signature ? addon_tags.signature : 0x0ADD0115;
+	unsigned char const *bytes = (unsigned char const *)addon->name;
+	long values[2];
+	short index;
+
+	values[0] = addon->tag_data_size;
+	values[1] = added;
+	for (; *bytes; bytes++)
+		signature = (signature ^ (unsigned char)(*bytes | 0x20)) * 16777619UL;
+	for (index = 0; index < (short)sizeof(values); index++)
+		signature = (signature ^ ((unsigned char const *)values)[index]) * 16777619UL;
+	addon_tags.signature = signature ? signature : 1;
 }
 
 void addon_tags_loaded(
@@ -458,6 +483,7 @@ void addon_tags_loaded(
 		addon->grafted = TRUE;
 		error(_error_silent, "addon: %s: %ld tags added to the level's %ld", addon->name, grafted_count - count,
 			count);
+		addon_tags_sign(addon, grafted_count - count);
 		addon_tags.tables[addon_tags.table_count++] = grafted;
 		table = grafted;
 		count = grafted_count;
@@ -519,4 +545,12 @@ void addon_tags_unloaded(
 	void)
 {
 	addon_tags_release();
+}
+
+unsigned long addon_tags_signature(
+	boolean *replaced)
+{
+	if (replaced)
+		*replaced = addon_tags.replaced;
+	return addon_tags.signature;
 }

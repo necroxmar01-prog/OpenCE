@@ -22,7 +22,12 @@ struct game_state_header
 	short player_count; // 0x124
 	short difficulty; // 0x126
 	unsigned long cache_file_checksum; // 0x128
-	long unused[7]; // 0x12C
+	/* port: the addons grafted onto the level (addon_tags_signature): 0 for
+	none, as every saved game before them has it; and whether a weapon mod's
+	game tags had the mod's data */
+	unsigned long port_addons; // 0x12C
+	long port_addons_replaced; // 0x130
+	long unused[5]; // 0x134
 	unsigned long checksum; // 0x148
 };
 

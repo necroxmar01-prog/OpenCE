@@ -37,4 +37,12 @@ the addon's bitmaps and sounds: its buffers, memory and table let go */
 void addon_tags_unloaded(
 	void);
 
+/* What the addons grafted onto the loaded level make of it, for its saved
+games (game_state.c): 0 if none was, else a signature of those grafted, in
+order (a saved game's objects name their tags by index); replaced (if not
+NULL) whether a weapon mod's game tags have the mod's data now (an object of
+the game's weapon saved without it would not fit it). */
+unsigned long addon_tags_signature(
+	boolean *replaced);
+
 #endif

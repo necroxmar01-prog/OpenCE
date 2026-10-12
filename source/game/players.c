@@ -4955,6 +4955,9 @@ void players_update_after_game(
 	}
 	if (network_coop_active() && network_game_distributed_client())
 		players_coop_show_host_wait();
+	/* port: a loaded game's player put in the armor chosen
+	(player_armor.c) */
+	player_armor_update();
 
 	data_iterator_new(&iterator, player_data);
 	while (player = data_iterator_next(&iterator))
