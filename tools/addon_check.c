@@ -93,8 +93,8 @@ typedef char verify_addon_graft_instance_size[sizeof(struct addon_graft_instance
 
 unsigned char tag_validate_tags(void *tag_header, long tag_data_size, long file_length, char const *map_name);
 long tag_validate_corrections(void);
-unsigned char addon_graft_relocate(struct addon_graft_header *header, long tag_data_size, long delta, char *error,
-	long error_size);
+unsigned char addon_graft_relocate(struct addon_graft_header *header, long tag_data_size, long delta,
+	unsigned long file_base, char *error, long error_size);
 long addon_graft_tags(struct addon_graft_instance const *level_instances, long level_count,
 	struct addon_graft_header *addon, char const *root_name, unsigned long root_group,
 	struct addon_graft_instance *instances, char *error, long error_size);
@@ -283,8 +283,8 @@ int main(int argc, char **argv)
 		return 2;
 	}
 	delta = (long)(addon_memory - tag_cache);
-	if (!addon_graft_relocate((struct addon_graft_header *)tag_cache, addon_header.tag_data_size, delta, error,
-		sizeof(error)))
+	if (!addon_graft_relocate((struct addon_graft_header *)tag_cache, addon_header.tag_data_size, delta,
+		(unsigned long)ADDON_GRAFT_FILE_BASE, error, sizeof(error)))
 	{
 		printf("addon: cannot be relocated: %s\n", error);
 		return 1;

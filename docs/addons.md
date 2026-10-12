@@ -1,4 +1,4 @@
-# Addons: a character grafted onto the campaign's levels
+# Addons: characters and weapons grafted onto the campaign's levels
 
 An armor (docs/player_armor.md) is a biped the player spawns as. The
 campaign's levels have only their own bipeds, so an armor from a character
@@ -106,9 +106,51 @@ halomaps.org has them) is built for this build with Invader:
    xbox-ntsc`; tags that only the build needs and the graft never adds
    (grenades' effects, menus) may be empty.
 
+## Weapon mods
+
+A weapon mod puts a mod's weapon in place of one of the game's in every
+campaign level: the one the player picks up and starts with, and the one
+the AI carries. The code is in `port/linux/game/weapon_mods.c`.
+
+Each weapon mod is a file of the data root's weapons folder,
+`d:\weapons\<id>.txt`:
+
+```
+name = Halo 3 assault rifle
+addon = cad-assault-rifle
+root = weapons\cad assault rifle\assault rifle.weapon
+replace = weapons\assault rifle\assault rifle.weapon -> weapons\cad assault rifle\assault rifle.weapon
+```
+
+| Key | What it is |
+| --- | --- |
+| `addon` | The addon whose tags the weapon mod uses. |
+| `root` | The tag grafted from that addon, with everything it needs. |
+| `replace` | One of the level's tags whose data the mod's tag stands in for, of the same group, given with extensions. Up to four. |
+
+A pack that brings only a weapon's first-person model and animations gets
+two `replace` lines, one for the game weapon's `fp\fp.model` and one for
+its `fp\fp.model_animations`. Its addon's root is a weapon that names them.
+
+As a level loads, `addon_tags.c` grafts the addons one after another: the
+armor's first, then each weapon mod's. Each addon is grafted onto the table
+the one before left, and gets its own range of the file offsets the game
+reads (`ADDON_GRAFT_FILE_SPAN` apart, up to 64 MB each). A weapon mod's
+addon is grafted only if the level has a tag it replaces.
+
+After the graft, each game tag the weapon mod replaces is pointed at the
+mod tag's data. The game tag keeps its index and name, so everything that
+names it gets the mod's weapon: the scenario's weapons, the AI's, the
+starting profiles and saved games.
+
+Weapon mods apply only to a campaign level on this machine alone. In
+network co-op the other machines would run the game's weapon.
+
 ## Limits
 
-- One addon at a time: the armor chosen's.
+- One armor at a time, the one chosen, and up to eight weapon mods.
+- A weapon mod whose tags have the same names as the game's adds nothing:
+  the level's own tags are the ones used.
 - A saved game holds the player's unit by its tag handle: loading a saved
   game made with another armor (or another addon) is not supported.
 - A biped with another animation graph than the level's Spartan's may lack

@@ -103,6 +103,8 @@ struct addon_graft_walk
 	byte *low;
 	byte *high;
 	long delta;
+	/* where its pixels and samples go in the offsets the game reads */
+	unsigned long file_base;
 	/* _walk_collect and _walk_remap: the addon's table, and each of its tags'
 	handle in the new table (NONE: not needed yet) */
 	struct addon_graft_instance const *addon_instances;
@@ -185,9 +187,10 @@ static void graft_move(
 }
 
 static void graft_move_offset(
+	struct addon_graft_walk *walk,
 	long *offset)
 {
-	*offset = (long)((unsigned long)*offset + ADDON_GRAFT_FILE_BASE);
+	*offset = (long)((unsigned long)*offset + walk->file_base);
 }
 
 /* the addon's tag handle as an index of its table, else NONE */
@@ -351,7 +354,7 @@ static void graft_fields(
 
 			case _tag_schema_file_data:
 				if (walk->mode == _walk_relocate && ((struct tag_data *)address)->size > 0)
-					graft_move_offset(&((struct tag_data *)address)->file_offset);
+					graft_move_offset(walk, &((struct tag_data *)address)->file_offset);
 				break;
 
 			case _tag_schema_reference:
@@ -445,7 +448,7 @@ static void graft_relocate_extras(
 			struct bitmap_data *bitmap = (struct bitmap_data *)group->bitmaps.address + bitmap_index;
 
 			if (bitmap->pixels_size > 0)
-				graft_move_offset(&bitmap->pixels_offset);
+				graft_move_offset(walk, &bitmap->pixels_offset);
 		}
 	}
 }
@@ -477,6 +480,7 @@ boolean addon_graft_relocate(
 	struct addon_graft_header *header,
 	long tag_data_size,
 	long delta,
+	unsigned long file_base,
 	char *error,
 	long error_size)
 {
@@ -488,6 +492,7 @@ boolean addon_graft_relocate(
 	walk.low = (byte *)header;
 	walk.high = (byte *)header + tag_data_size;
 	walk.delta = delta;
+	walk.file_base = file_base;
 	walk.error = error;
 	walk.error_size = error_size;
 	if (error && error_size > 0)

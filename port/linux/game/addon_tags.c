@@ -1,10 +1,11 @@
 /*
 ADDON_TAGS.C
 
-The armor's addon (player_armor.c) grafted onto a campaign level as it
-loads, so that a character mod's biped is in every level without the
-levels being built again. addon_graft.c does the format work;
-docs/addons.md has the whole of it.
+Addons grafted onto a campaign level as it loads, so that mods' tags are in
+every level without the levels being built again: the armor's
+(player_armor.c), a character mod's biped, and the weapon mods'
+(weapon_mods.c), each a weapon in place of one of the game's. addon_graft.c
+does the format work; docs/addons.md has the whole of it.
 
 An addon is a map built for this build (Invader's -g xbox-ntsc), in the
 data root's addons folder (d:\addons\<name>.map), whose scenario names the
@@ -25,8 +26,15 @@ a campaign level loads (scenario_tags_load):
    (addon_tags_read);
 4. addon_tags_unloaded, as the level's tags go, lets it all go.
 
-Anything that fails is logged (debug.txt) and the level loads as it is: the
-armor's biped is then not in it, and the level's Spartan spawns.
+Several addons are grafted one after another, each onto the table the one
+before left, with its pixels and samples at a base of its own
+(ADDON_GRAFT_FILE_SPAN apart). A weapon mod's is grafted only if the level
+has the weapon it replaces; then the game's tag is pointed at the mod's
+data (its index kept: everything that names it gets the mod's).
+
+Anything that fails is logged (debug.txt) and the level loads without that
+addon: an armor's biped is then not in it, and the level's Spartan spawns;
+a weapon is the game's.
 */
 
 /* ---------- headers */
@@ -39,6 +47,7 @@ armor's biped is then not in it, and the level's Spartan spawns.
 #include "addon_graft.h"
 #include "addon_tags.h"
 #include "player_armor.h"
+#include "weapon_mods.h"
 #include "../../third_party/zlib/zlib_prefixed.h"
 
 #include <xtl.h>
@@ -64,8 +73,11 @@ enum
 	ADDON_TAGS_XBOX_VERSION = 5,
 	/* the tag cache's size (physical_memory_map.h) */
 	ADDON_TAGS_TAG_CACHE_SIZE = 0x1600000,
-	/* the largest addon read: a character's tags and pixels */
-	ADDON_TAGS_MAXIMUM_FILE_SIZE = 256 * 1024 * 1024,
+	/* the largest addon read: a character's tags and pixels (each addon's
+	offsets have ADDON_GRAFT_FILE_SPAN) */
+	ADDON_TAGS_MAXIMUM_FILE_SIZE = (long)ADDON_GRAFT_FILE_SPAN,
+	/* the armor's and the weapon mods' */
+	ADDON_TAGS_MAXIMUM_ADDONS = 1 + WEAPON_MODS_MAXIMUM,
 	ADDON_TAGS_GROUP_BIPED = 'bipd',
 	ADDON_TAGS_MAP_TYPE_CAMPAIGN = 0,
 };
@@ -92,7 +104,7 @@ typedef char verify_addon_tags_file_header_size[
 
 /* ---------- globals */
 
-static struct
+struct addon_tags_addon
 {
 	/* the addon's file, inflated: its pixels and samples are read from it */
 	byte *file;
@@ -100,11 +112,27 @@ static struct
 	/* its tags, where they are kept */
 	byte *memory;
 	long tag_data_size;
-	/* the table with its tags added */
-	struct addon_graft_instance *instances;
+	/* where its pixels and samples are in the game's reads */
+	unsigned long file_base;
+	boolean grafted;
 	boolean buffers_registered;
 	char name[64];
-	char tag[256];
+	/* the tag grafted with all it needs */
+	unsigned long root_group;
+	char root[256];
+	/* a weapon mod's (else NONE): the game's tags it replaces */
+	short weapon_mod;
+};
+
+static struct
+{
+	struct addon_tags_addon addons[ADDON_TAGS_MAXIMUM_ADDONS];
+	short addon_count;
+	struct weapon_mod weapon_mods[WEAPON_MODS_MAXIMUM];
+	/* the table with their tags added (each graft's own; the last one is the
+	game's) */
+	struct addon_graft_instance *tables[ADDON_TAGS_MAXIMUM_ADDONS];
+	short table_count;
 } addon_tags;
 
 /* ---------- private code */
@@ -117,15 +145,27 @@ static void addon_tags_free(
 		free(pointer);
 }
 
+static void addon_tags_release_addon(
+	struct addon_tags_addon *addon)
+{
+	if (addon->buffers_registered && addon->memory)
+		tags_header_deregister_vertex_and_index_buffers((struct cache_file_tag_header *)addon->memory);
+	if (addon->memory)
+		XPhysicalFree(addon->memory);
+	addon_tags_free(addon->file);
+	csmemset(addon, 0, sizeof(*addon));
+	addon->weapon_mod = NONE;
+}
+
 static void addon_tags_release(
 	void)
 {
-	if (addon_tags.buffers_registered && addon_tags.memory)
-		tags_header_deregister_vertex_and_index_buffers((struct cache_file_tag_header *)addon_tags.memory);
-	if (addon_tags.memory)
-		XPhysicalFree(addon_tags.memory);
-	addon_tags_free(addon_tags.file);
-	addon_tags_free(addon_tags.instances);
+	short index;
+
+	for (index = 0; index < addon_tags.addon_count; index++)
+		addon_tags_release_addon(&addon_tags.addons[index]);
+	for (index = 0; index < addon_tags.table_count; index++)
+		addon_tags_free(addon_tags.tables[index]);
 	csmemset(&addon_tags, 0, sizeof(addon_tags));
 }
 
@@ -197,115 +237,249 @@ static byte *addon_tags_file_read(
 
 /* ---------- public code */
 
-boolean addon_tags_prepare(
+/* the addon read, checked by the validator where the level's tags go
+(tag_cache), and moved to memory of its own; FALSE (logged, let go) if it
+cannot be */
+static boolean addon_tags_read_addon(
 	void *tag_cache,
-	short map_type)
+	struct addon_tags_addon *addon,
+	char const *name)
 {
-	char addon[64];
 	char path[MAX_PATH];
 	char reason[400];
 	struct addon_tags_file_header const *header;
 
-	addon_tags_release();
-	if (map_type != ADDON_TAGS_MAP_TYPE_CAMPAIGN ||
-		!player_armor_addon(addon, sizeof(addon), addon_tags.tag, sizeof(addon_tags.tag)))
-	{
+	csprintf(path, "%s%s%s", ADDON_TAGS_FOLDER, name, ADDON_TAGS_EXTENSION);
+	strncpy(addon->name, name, sizeof(addon->name) - 1);
+	addon->file = addon_tags_file_read(path, &addon->file_length);
+	if (!addon->file)
 		return FALSE;
-	}
-	csprintf(path, "%s%s%s", ADDON_TAGS_FOLDER, addon, ADDON_TAGS_EXTENSION);
-	addon_tags.file = addon_tags_file_read(path, &addon_tags.file_length);
-	if (!addon_tags.file)
-	{
-		addon_tags_release();
-		return FALSE;
-	}
-	header = (struct addon_tags_file_header const *)addon_tags.file;
-	strncpy(addon_tags.name, addon, sizeof(addon_tags.name) - 1);
+	header = (struct addon_tags_file_header const *)addon->file;
 	if (header->tag_data_offset < ADDON_TAGS_HEADER_SIZE || header->tag_data_size <= 0 ||
 		header->tag_data_size > ADDON_TAGS_TAG_CACHE_SIZE ||
 		header->tag_data_offset > header->file_length - header->tag_data_size)
 	{
-		error(_error_silent, "addon: %s: its tag data is outside it", addon);
-		addon_tags_release();
+		error(_error_silent, "addon: %s: its tag data is outside it", name);
 		return FALSE;
 	}
 
 	/* its tags where a map's are read, checked as a map's are */
-	addon_tags.tag_data_size = header->tag_data_size;
+	addon->tag_data_size = header->tag_data_size;
 	csmemset(tag_cache, 0xCD, ADDON_TAGS_TAG_CACHE_SIZE);
-	csmemcpy(tag_cache, addon_tags.file + header->tag_data_offset, header->tag_data_size);
-	if (!tag_validate_tags(tag_cache, header->tag_data_size, header->file_length, addon))
+	csmemcpy(tag_cache, addon->file + header->tag_data_offset, header->tag_data_size);
+	if (!tag_validate_tags(tag_cache, header->tag_data_size, header->file_length, name))
 	{
-		error(_error_silent, "addon: %s: refused by the validator (debug.txt above)", addon);
-		addon_tags_release();
+		error(_error_silent, "addon: %s: refused by the validator (debug.txt above)", name);
 		return FALSE;
 	}
 
 	/* moved to memory of their own (the contiguous memory the game's
 	buffers are in, as the tag cache is) */
-	addon_tags.memory = XPhysicalAlloc(header->tag_data_size, (unsigned long)-1, 0, PAGE_READWRITE);
-	if (!addon_tags.memory)
+	addon->memory = XPhysicalAlloc(header->tag_data_size, (unsigned long)-1, 0, PAGE_READWRITE);
+	if (!addon->memory)
 	{
-		error(_error_silent, "addon: %s: no memory for its %ld bytes of tags", addon, header->tag_data_size);
-		addon_tags_release();
+		error(_error_silent, "addon: %s: no memory for its %ld bytes of tags", name, header->tag_data_size);
 		return FALSE;
 	}
-	if (!addon_graft_relocate(tag_cache, header->tag_data_size, (long)(addon_tags.memory - (byte *)tag_cache),
-		reason, sizeof(reason)))
+	if (!addon_graft_relocate(tag_cache, header->tag_data_size, (long)(addon->memory - (byte *)tag_cache),
+		addon->file_base, reason, sizeof(reason)))
 	{
-		error(_error_silent, "addon: %s: cannot be moved: %s", addon, reason);
-		addon_tags_release();
+		error(_error_silent, "addon: %s: cannot be moved: %s", name, reason);
 		return FALSE;
 	}
-	csmemcpy(addon_tags.memory, tag_cache, header->tag_data_size);
-	error(_error_silent, "addon: %s read (%ld bytes of tags) for %s", addon, header->tag_data_size, addon_tags.tag);
-
+	csmemcpy(addon->memory, tag_cache, header->tag_data_size);
+	error(_error_silent, "addon: %s read (%ld bytes of tags) for %s", name, header->tag_data_size, addon->root);
 	return TRUE;
+}
+
+boolean addon_tags_prepare(
+	void *tag_cache,
+	short map_type)
+{
+	char name[64];
+	short weapon_mod_count;
+	short index;
+
+	addon_tags_release();
+	if (map_type != ADDON_TAGS_MAP_TYPE_CAMPAIGN)
+		return FALSE;
+
+	/* the armor's, then each weapon mod's */
+	if (player_armor_addon(name, sizeof(name), addon_tags.addons[0].root, sizeof(addon_tags.addons[0].root)))
+	{
+		struct addon_tags_addon *addon = &addon_tags.addons[addon_tags.addon_count];
+
+		addon->weapon_mod = NONE;
+		addon->root_group = ADDON_TAGS_GROUP_BIPED;
+		addon->file_base = ADDON_GRAFT_FILE_BASE + addon_tags.addon_count * ADDON_GRAFT_FILE_SPAN;
+		addon_tags.addon_count++;
+		if (!addon_tags_read_addon(tag_cache, addon, name))
+		{
+			addon_tags_release_addon(addon);
+			addon_tags.addon_count--;
+		}
+	}
+	weapon_mod_count = weapon_mods_for_level(addon_tags.weapon_mods, WEAPON_MODS_MAXIMUM);
+	for (index = 0; index < weapon_mod_count; index++)
+	{
+		struct weapon_mod const *mod = &addon_tags.weapon_mods[index];
+		struct addon_tags_addon *addon = &addon_tags.addons[addon_tags.addon_count];
+		short other;
+		boolean shared = FALSE;
+
+		/* (two weapon mods from one addon: read once, grafted once) */
+		for (other = 0; other < addon_tags.addon_count; other++)
+		{
+			if (addon_tags.addons[other].weapon_mod != NONE && !_stricmp(addon_tags.addons[other].name, mod->addon) &&
+				addon_tags.addons[other].root_group == mod->root_group &&
+				!_stricmp(addon_tags.addons[other].root, mod->root))
+			{
+				shared = TRUE;
+			}
+		}
+		if (shared)
+			continue;
+		addon->weapon_mod = index;
+		addon->root_group = mod->root_group;
+		strncpy(addon->root, mod->root, sizeof(addon->root) - 1);
+		addon->file_base = ADDON_GRAFT_FILE_BASE + addon_tags.addon_count * ADDON_GRAFT_FILE_SPAN;
+		addon_tags.addon_count++;
+		if (!addon_tags_read_addon(tag_cache, addon, mod->addon))
+		{
+			addon_tags_release_addon(addon);
+			addon_tags.addon_count--;
+		}
+	}
+
+	return addon_tags.addon_count > 0;
+}
+
+/* whether the level (table) has a game tag a weapon mod replaces */
+static boolean addon_tags_weapon_mod_wanted(
+	struct weapon_mod const *mod,
+	struct addon_graft_instance const *table,
+	long count)
+{
+	short replacement;
+
+	for (replacement = 0; replacement < mod->replacement_count; replacement++)
+	{
+		if (addon_graft_find(table, count, mod->replacements[replacement].group_tag,
+				mod->replacements[replacement].stock) != NONE)
+		{
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+/* the weapon mod's game tags pointed at its own data (each keeps its index
+and name: everything that names it gets the mod's) */
+static void addon_tags_weapon_mod_replace(
+	struct weapon_mod const *mod,
+	struct addon_graft_instance *table,
+	long count)
+{
+	short replacement;
+
+	for (replacement = 0; replacement < mod->replacement_count; replacement++)
+	{
+		struct weapon_mod_replacement const *pair = &mod->replacements[replacement];
+		long stock = addon_graft_find(table, count, pair->group_tag, pair->stock);
+		long replacing = addon_graft_find(table, count, pair->group_tag, pair->mod);
+
+		if (stock == NONE)
+			continue;
+		if (replacing == NONE)
+		{
+			error(_error_silent, "weapon %s: %s is not in its addon", mod->id, pair->mod);
+			continue;
+		}
+		table[stock & 0xFFFF].base_address = table[replacing & 0xFFFF].base_address;
+		error(_error_silent, "weapon %s: %s is now %s", mod->id, pair->stock, pair->mod);
+	}
 }
 
 void addon_tags_loaded(
 	void)
 {
-	struct addon_graft_header *addon = (struct addon_graft_header *)addon_tags.memory;
-	struct addon_graft_instance *level_instances;
+	struct addon_graft_instance *table;
 	long level_count;
 	long count;
-	char reason[400];
+	short index;
 
-	if (!addon)
+	if (!addon_tags.addon_count)
 		return;
-	level_instances = cache_files_tag_instances(&level_count);
-	if (!level_instances)
+	table = cache_files_tag_instances(&level_count);
+	if (!table)
 	{
 		addon_tags_release();
 		return;
 	}
-	addon_tags.instances = malloc((size_t)(level_count + addon->tag_count) * sizeof(*addon_tags.instances));
-	if (!addon_tags.instances)
+	count = level_count;
+	for (index = 0; index < addon_tags.addon_count; index++)
 	{
-		error(_error_silent, "addon: %s: no memory for the tag table", addon_tags.name);
-		addon_tags_release();
-		return;
+		struct addon_tags_addon *addon = &addon_tags.addons[index];
+		struct addon_graft_header *header = (struct addon_graft_header *)addon->memory;
+		struct weapon_mod const *mod = addon->weapon_mod != NONE ? &addon_tags.weapon_mods[addon->weapon_mod] : NULL;
+		struct addon_graft_instance *grafted;
+		long grafted_count;
+		char reason[400];
+
+		if (!header)
+			continue;
+		if (mod && !addon_tags_weapon_mod_wanted(mod, table, count))
+		{
+			error(_error_silent, "weapon %s: this level has not the weapon it replaces", mod->id);
+			continue;
+		}
+		grafted = malloc((size_t)(count + header->tag_count) * sizeof(*grafted));
+		if (!grafted)
+		{
+			error(_error_silent, "addon: %s: no memory for the tag table", addon->name);
+			continue;
+		}
+		grafted_count = addon_graft_tags(table, count, header, addon->root, addon->root_group, grafted, reason,
+			sizeof(reason));
+		if (grafted_count == NONE)
+		{
+			error(_error_silent, "addon: %s cannot be grafted: %s", addon->name, reason);
+			addon_tags_free(grafted);
+			continue;
+		}
+		if (addon_graft_references(grafted, grafted_count, count, reason, sizeof(reason)))
+		{
+			error(_error_silent, "addon: %s: a tag added names one it should not: %s", addon->name, reason);
+			addon_tags_free(grafted);
+			continue;
+		}
+		tags_header_register_vertex_and_index_buffers((struct cache_file_tag_header *)addon->memory);
+		addon->buffers_registered = TRUE;
+		addon->grafted = TRUE;
+		error(_error_silent, "addon: %s: %ld tags added to the level's %ld", addon->name, grafted_count - count,
+			count);
+		addon_tags.tables[addon_tags.table_count++] = grafted;
+		table = grafted;
+		count = grafted_count;
+
+		/* the weapon mods of this addon (one, or several sharing it) */
+		{
+			short other;
+
+			for (other = 0; other < (short)WEAPON_MODS_MAXIMUM && mod; other++)
+			{
+				struct weapon_mod const *each = &addon_tags.weapon_mods[other];
+
+				if (each->addon[0] && !_stricmp(each->addon, mod->addon) && each->root_group == mod->root_group &&
+					!_stricmp(each->root, mod->root))
+				{
+					addon_tags_weapon_mod_replace(each, table, count);
+				}
+			}
+		}
 	}
-	count = addon_graft_tags(level_instances, level_count, addon, addon_tags.tag, ADDON_TAGS_GROUP_BIPED,
-		addon_tags.instances, reason, sizeof(reason));
-	if (count == NONE)
-	{
-		error(_error_silent, "addon: %s cannot be grafted: %s", addon_tags.name, reason);
-		addon_tags_release();
-		return;
-	}
-	if (addon_graft_references(addon_tags.instances, count, level_count, reason, sizeof(reason)))
-	{
-		error(_error_silent, "addon: %s: a tag added names one it should not: %s", addon_tags.name, reason);
-		addon_tags_release();
-		return;
-	}
-	tags_header_register_vertex_and_index_buffers((struct cache_file_tag_header *)addon_tags.memory);
-	addon_tags.buffers_registered = TRUE;
-	cache_files_set_tag_instances(addon_tags.instances, count);
-	error(_error_silent, "addon: %s: %ld tags added to the level's %ld", addon_tags.name, count - level_count,
-		level_count);
+	if (addon_tags.table_count)
+		cache_files_set_tag_instances(table, count);
 }
 
 boolean addon_tags_read(
@@ -313,20 +487,32 @@ boolean addon_tags_read(
 	long size,
 	void *buffer)
 {
-	unsigned long file_offset;
+	short index;
 
-	if (!addon_tags.instances || (unsigned long)offset < ADDON_GRAFT_FILE_BASE)
+	if ((unsigned long)offset < ADDON_GRAFT_FILE_BASE)
 		return FALSE;
-	file_offset = (unsigned long)offset - ADDON_GRAFT_FILE_BASE;
-	if (size < 0 || file_offset > (unsigned long)addon_tags.file_length ||
-		(unsigned long)size > (unsigned long)addon_tags.file_length - file_offset)
+	for (index = 0; index < addon_tags.addon_count; index++)
 	{
-		/* (the validator kept them in the file; a read past it is zeros) */
-		csmemset(buffer, 0, size > 0 ? size : 0);
+		struct addon_tags_addon const *addon = &addon_tags.addons[index];
+		unsigned long file_offset;
+
+		if (!addon->grafted || (unsigned long)offset < addon->file_base ||
+			(unsigned long)offset - addon->file_base >= ADDON_GRAFT_FILE_SPAN)
+		{
+			continue;
+		}
+		file_offset = (unsigned long)offset - addon->file_base;
+		if (size < 0 || file_offset > (unsigned long)addon->file_length ||
+			(unsigned long)size > (unsigned long)addon->file_length - file_offset)
+		{
+			/* (the validator kept them in the file; a read past it is zeros) */
+			csmemset(buffer, 0, size > 0 ? size : 0);
+			return TRUE;
+		}
+		csmemcpy(buffer, addon->file + file_offset, size);
 		return TRUE;
 	}
-	csmemcpy(buffer, addon_tags.file + file_offset, size);
-	return TRUE;
+	return FALSE;
 }
 
 void addon_tags_unloaded(

@@ -11,9 +11,12 @@ map files as the game does (addon_tags.c).
 
 /* ---------- constants */
 
-/* where an addon's pixels and samples are, in the offsets the game reads a
-map's file with: past any map's own (the largest Xbox map is under 300 MB) */
+/* where the addons' pixels and samples are, in the offsets the game reads a
+map's file with: past any map's own (the largest Xbox map is under 300 MB),
+each addon's at its own base, ADDON_GRAFT_FILE_SPAN apart (addon_tags.c
+has several at once: an armor's and weapons') */
 #define ADDON_GRAFT_FILE_BASE 0x40000000UL
+#define ADDON_GRAFT_FILE_SPAN 0x04000000UL
 
 /* ---------- structures */
 
@@ -50,11 +53,13 @@ bytes away, where the caller then copies them: every pointer into them moved
 by delta (the tag table and names, blocks, data, references' names, vertex
 and index buffers and the models' parts' pointers to them), and every offset
 of their pixels and samples in the addon's file moved past the level's, by
-ADDON_GRAFT_FILE_BASE. FALSE, with why in error, if a tag cannot be. */
+file_base (ADDON_GRAFT_FILE_BASE, the first addon's). FALSE, with why in
+error, if a tag cannot be. */
 boolean addon_graft_relocate(
 	struct addon_graft_header *header,
 	long tag_data_size,
 	long delta,
+	unsigned long file_base,
 	char *error,
 	long error_size);
 
