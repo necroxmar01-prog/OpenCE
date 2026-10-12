@@ -3109,7 +3109,18 @@ boolean network_game_client_advertised_game_compatible(
 		network_event("joining a host of network version %u", theirs);
 		return TRUE;
 	}
-	if (theirs == ours)
+	if ((theirs ^ ours) & HALO_PORT_NETWORK_VERSION_MODS)
+	{
+		/* port (opence-mods): one of the two builds has the mods' patches */
+		csprintf(message,
+			"%s",
+			(ours & HALO_PORT_NETWORK_VERSION_MODS) ?
+				"The host's game is not the opence-mods build (armors and mod weapons).\n\n"
+				"Both players need the opence-mods build to play together." :
+				"The host's game is the opence-mods build (armors and mod weapons).\n\n"
+				"Both players need the opence-mods build to play together.");
+	}
+	else if (theirs == ours)
 	{
 		csprintf(message,
 			"The host is using the lockstep network code, which this version no longer has.\n\n"

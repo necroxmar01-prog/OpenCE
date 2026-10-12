@@ -66,7 +66,14 @@ is newer (network_client_manager.c). A host advertises it, with its netcode,
 in its game's advertisement's reserved bytes (network_server_message_handler.c),
 which hosts built before there was a version send as zeros: version 0.
 Raise it with any change to what the machines send each other. */
-#define HALO_PORT_NETWORK_VERSION 27
+/* port (opence-mods): the mods' builds send messages of their own (a co-op
+host's addons and each player's armor: port/linux/game/network_addons.c),
+and graft the host's addons as a level loads, which a build without them
+does not: their version is this bit and the upstream one (27), so that
+neither joins the other's games, and the player is told why
+(network_client_manager.c) */
+#define HALO_PORT_NETWORK_VERSION_MODS 0x4000
+#define HALO_PORT_NETWORK_VERSION 16411 /* 27 | HALO_PORT_NETWORK_VERSION_MODS */
 /* ... the advertisement's reserved bytes: the version (a little-endian word),
 then flags */
 #define HALO_PORT_ADVERTISED_VERSION_OFFSET 0
