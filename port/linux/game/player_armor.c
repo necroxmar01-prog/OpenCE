@@ -541,7 +541,7 @@ void player_armor_catalog_load(
 		armor_choice_read();
 	}
 	if (player_armor_globals.count != previous_count)
-		error(_error_silent, "armor: %d armors (%d from %s)", player_armor_globals.count,
+		error(_error_silent, "armor: %d armors (%d from %s) [" PLAYER_ARMOR_PATCH_TEXT "]", player_armor_globals.count,
 			player_armor_globals.count - PLAYER_ARMOR_GAME_ARMORS, PLAYER_ARMOR_FOLDER);
 }
 

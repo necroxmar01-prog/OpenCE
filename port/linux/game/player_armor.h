@@ -8,6 +8,12 @@ ARMOR, before a mission): player_armor.c.
 #ifndef __PLAYER_ARMOR_H
 #define __PLAYER_ARMOR_H
 
+/* how much of the mods' patches this build has, in its own words (the log's
+armor line, and the executable: opence-mods reads it to tell an older
+patched build, which lacks what newer mods need, from this one). One more
+with each patch to the mods' code. */
+#define PLAYER_ARMOR_PATCH_TEXT "opence-mods patch 8"
+
 /* the armors: the game's own two, then those of the data root's armors
 folder (d:\armors\*.txt), read again by player_armor_catalog_load */
 void player_armor_catalog_load(void);
