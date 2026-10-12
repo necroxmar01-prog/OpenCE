@@ -389,6 +389,9 @@ static char const *const port_function_names[] =
 	"new campaign decision",
 	/* (Change Color's ARMOR: the campaign Spartan's armor, player_armor.c) */
 	"port armor list initialize", "port armor select",
+	/* (ARMOR's PIECES: an armor's helmet, chest, shoulders, each chosen) */
+	"port armor pieces open", "port armor pieces initialize", "port armor piece open",
+	"port armor options initialize", "port armor option select",
 };
 
 /* the PC version's game data functions that the Xbox's have not, from
@@ -411,7 +414,7 @@ static char const *const port_game_data_input_names[] =
 	on Gamepad Setup's row) */
 	"port gamepad layout preview",
 	/* (ARMOR's list: menu_functions.c's armor list) */
-	"port armor list update",
+	"port armor list update", "port armor pieces update", "port armor options update",
 };
 
 static struct

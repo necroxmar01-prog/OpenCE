@@ -14,6 +14,30 @@ patched build, which lacks what newer mods need, from this one). One more
 with each patch to the mods' code. */
 #define PLAYER_ARMOR_PATCH_TEXT "opence-mods patch 8"
 
+/* what an armor puts on a player's unit: the biped (empty: the map's player
+unit), whether it wears the profile's colour, and the permutation of each
+region of its model (its own, and the pieces chosen). A network co-op
+player's travels to the host this way (network_coop_armor.c). */
+enum
+{
+	PLAYER_ARMOR_DRESS_REGIONS = 16,
+	PLAYER_ARMOR_DRESS_BIPED = 256,
+	PLAYER_ARMOR_DRESS_NAME = 32,
+};
+
+struct player_armor_dress
+{
+	char biped[PLAYER_ARMOR_DRESS_BIPED];
+	byte profile_color;
+	byte region_count;
+	byte pad[2];
+	struct
+	{
+		char region[PLAYER_ARMOR_DRESS_NAME];
+		char permutation[PLAYER_ARMOR_DRESS_NAME];
+	} regions[PLAYER_ARMOR_DRESS_REGIONS];
+};
+
 /* the armors: the game's own two, then those of the data root's armors
 folder (d:\armors\*.txt), read again by player_armor_catalog_load */
 void player_armor_catalog_load(void);
@@ -23,6 +47,16 @@ void player_armor_description(short armor, wchar_t *text, short length);
 /* whether the loaded campaign level has the armor's biped (TRUE outside
 one, as in the main menu: it is checked when a level loads) */
 boolean player_armor_available(short armor);
+
+/* an armor's pieces (Halo 3's helmet, chest, shoulders: 0 if it has none),
+each piece's name, its options and their names, the one worn, and one
+chosen (kept in u:\armor.txt, for that armor) */
+short player_armor_piece_count(short armor);
+void player_armor_piece_name(short armor, short piece, wchar_t *text, short length);
+short player_armor_option_count(short armor, short piece);
+void player_armor_option_name(short armor, short piece, short option, wchar_t *text, short length);
+short player_armor_option_worn(short armor, short piece);
+void player_armor_option_choose(short armor, short piece, short option);
 
 /* the armor chosen, kept in the saves (u:\armor.txt) */
 short player_armor_selected(void);

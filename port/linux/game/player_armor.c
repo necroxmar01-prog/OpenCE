@@ -85,6 +85,15 @@ weapons, grenades, health and shields.
 
 #define PLAYER_ARMOR_MAXIMUM_ARMORS 32
 #define PLAYER_ARMOR_MAXIMUM_PERMUTATIONS 8
+/* an armor's pieces chosen one by one (Halo 3's helmet, chest, shoulders):
+the regions, the permutations each offers, and the regions that go with a
+piece (the body with the chest) */
+#define PLAYER_ARMOR_MAXIMUM_PIECES 6
+#define PLAYER_ARMOR_MAXIMUM_OPTIONS 16
+#define PLAYER_ARMOR_MAXIMUM_FOLLOWS 4
+#define PLAYER_ARMOR_PIECE_NAME_LENGTH 24
+/* the pieces chosen, of every armor (u:\armor.txt) */
+#define PLAYER_ARMOR_MAXIMUM_CHOICES 64
 #define PLAYER_ARMOR_ID_LENGTH 48
 #define PLAYER_ARMOR_NAME_LENGTH 48
 #define PLAYER_ARMOR_DESCRIPTION_LENGTH 160
@@ -108,6 +117,35 @@ struct player_armor_permutation
 	char permutation[TAG_STRING_LENGTH + 1];
 };
 
+struct player_armor_option
+{
+	char permutation[TAG_STRING_LENGTH + 1];
+	wchar_t name[PLAYER_ARMOR_PIECE_NAME_LENGTH];
+};
+
+struct player_armor_piece
+{
+	char region[TAG_STRING_LENGTH + 1];
+	wchar_t name[PLAYER_ARMOR_PIECE_NAME_LENGTH];
+	short option_count;
+	struct player_armor_option options[PLAYER_ARMOR_MAXIMUM_OPTIONS];
+};
+
+/* a region that takes the permutation chosen for a piece's */
+struct player_armor_follow
+{
+	char region[TAG_STRING_LENGTH + 1];
+	char piece[TAG_STRING_LENGTH + 1];
+};
+
+/* a piece chosen: of an armor (its id), the region and its permutation */
+struct player_armor_choice
+{
+	char armor[PLAYER_ARMOR_ID_LENGTH];
+	char region[TAG_STRING_LENGTH + 1];
+	char permutation[TAG_STRING_LENGTH + 1];
+};
+
 struct player_armor
 {
 	char id[PLAYER_ARMOR_ID_LENGTH];
@@ -121,6 +159,10 @@ struct player_armor
 	short color;
 	short permutation_count;
 	struct player_armor_permutation permutations[PLAYER_ARMOR_MAXIMUM_PERMUTATIONS];
+	short piece_count;
+	struct player_armor_piece pieces[PLAYER_ARMOR_MAXIMUM_PIECES];
+	short follow_count;
+	struct player_armor_follow follows[PLAYER_ARMOR_MAXIMUM_FOLLOWS];
 };
 
 /* ---------- globals */
@@ -135,7 +177,10 @@ static struct
 	/* the local players of a saved game just loaded, to be put in the armor
 	chosen (player_armor_update) */
 	boolean dress_loaded[MAXIMUM_NUMBER_OF_LOCAL_PLAYERS];
-} player_armor_globals = { FALSE, 0, { { { 0 } } }, NONE, { 0 } };
+	/* the pieces chosen (read with the armor chosen) */
+	short choice_count;
+	struct player_armor_choice choices[PLAYER_ARMOR_MAXIMUM_CHOICES];
+} player_armor_globals = { FALSE, 0, { { { 0 } } }, NONE, { 0 }, 0, { { { 0 } } } };
 
 /* ---------- private code */
 
@@ -212,6 +257,80 @@ static void armor_copy(char *destination, char const *source, size_t size)
 	destination[size - 1] = 0;
 }
 
+/* the first word of text (cut there), and the rest after it, else NULL */
+static char *armor_word(char *text)
+{
+	char *space = strpbrk(text, " \t");
+
+	if (!space)
+		return NULL;
+	*space++ = 0;
+	return armor_trim(space);
+}
+
+static struct player_armor_piece *armor_piece_named(struct player_armor *armor, char const *region)
+{
+	short index;
+
+	for (index = 0; index < armor->piece_count; index++)
+	{
+		if (!_stricmp(armor->pieces[index].region, region))
+			return &armor->pieces[index];
+	}
+	return NULL;
+}
+
+/* An armor file's pieces (FALSE: the line is not one):
+
+	piece = <region> <name>                  a piece chosen in the menus
+	option = <region> <permutation> <name>   one it offers (the first: the default)
+	follow = <region> <piece's region>       a region worn as that piece is
+*/
+static boolean armor_read_piece(char const *id, struct player_armor *armor, char const *key, char *value)
+{
+	char *rest = armor_word(value);
+
+	if (!rest || strlen(value) > TAG_STRING_LENGTH)
+		return FALSE;
+	if (!_stricmp(key, "piece"))
+	{
+		struct player_armor_piece *piece = armor_piece_named(armor, value);
+
+		if (!piece)
+		{
+			if (armor->piece_count >= PLAYER_ARMOR_MAXIMUM_PIECES)
+				return FALSE;
+			piece = &armor->pieces[armor->piece_count++];
+			armor_copy(piece->region, value, sizeof(piece->region));
+		}
+		armor_text_from_utf8(rest, piece->name, PLAYER_ARMOR_PIECE_NAME_LENGTH);
+		return TRUE;
+	}
+	if (!_stricmp(key, "option"))
+	{
+		struct player_armor_piece *piece = armor_piece_named(armor, value);
+		char *name = armor_word(rest);
+		struct player_armor_option *option;
+
+		if (!piece || piece->option_count >= PLAYER_ARMOR_MAXIMUM_OPTIONS || strlen(rest) > TAG_STRING_LENGTH)
+			return FALSE;
+		option = &piece->options[piece->option_count++];
+		armor_copy(option->permutation, rest, sizeof(option->permutation));
+		if (name && *name)
+			armor_text_from_utf8(name, option->name, PLAYER_ARMOR_PIECE_NAME_LENGTH);
+		else
+			armor_text_from_ascii(rest, option->name, PLAYER_ARMOR_PIECE_NAME_LENGTH);
+		return TRUE;
+	}
+	if (armor->follow_count >= PLAYER_ARMOR_MAXIMUM_FOLLOWS || strlen(rest) > TAG_STRING_LENGTH)
+		return FALSE;
+	armor_copy(armor->follows[armor->follow_count].region, value, sizeof(armor->follows[0].region));
+	armor_copy(armor->follows[armor->follow_count].piece, rest, sizeof(armor->follows[0].piece));
+	armor->follow_count++;
+	(void)id;
+	return TRUE;
+}
+
 /* the armor of the file armors/<id>.txt, else FALSE */
 static boolean armor_read(char const *id, struct player_armor *armor)
 {
@@ -257,6 +376,11 @@ static boolean armor_read(char const *id, struct player_armor *armor)
 		else if (!_stricmp(key, "color"))
 		{
 			armor->color = (short)(_stricmp(value, "tag") ? _player_armor_color_profile : _player_armor_color_tag);
+		}
+		else if (!_stricmp(key, "piece") || !_stricmp(key, "option") || !_stricmp(key, "follow"))
+		{
+			if (!armor_read_piece(id, armor, key, value))
+				error(_error_silent, "armor %s: ignoring %s '%s'", id, key, value);
 		}
 		else if (!_stricmp(key, "permutation"))
 		{
@@ -309,23 +433,47 @@ static void armor_game_armors(void)
 	armor[1].color = _player_armor_color_profile;
 }
 
+/* The choice file: the armor chosen's id, then a line for each piece
+chosen, of any armor ("piece <armor id> <region> <permutation>"). */
 static void armor_choice_read(void)
 {
-	char id[PLAYER_ARMOR_ID_LENGTH] = "";
+	char line[256];
 	FILE *file = fopen(PLAYER_ARMOR_CHOICE_FILE, "r");
+	boolean first = TRUE;
 	short armor;
 
 	player_armor_globals.selected = 0;
+	player_armor_globals.choice_count = 0;
 	if (!file)
 		return;
-	if (fgets(id, sizeof(id), file))
+	while (fgets(line, sizeof(line), file))
 	{
-		char *trimmed = armor_trim(id);
+		char *text = armor_trim(line);
 
-		for (armor = 0; armor < player_armor_globals.count; armor++)
+		if (first)
 		{
-			if (!_stricmp(player_armor_globals.armors[armor].id, trimmed))
-				player_armor_globals.selected = armor;
+			first = FALSE;
+			for (armor = 0; armor < player_armor_globals.count; armor++)
+			{
+				if (!_stricmp(player_armor_globals.armors[armor].id, text))
+					player_armor_globals.selected = armor;
+			}
+		}
+		else if (!strncmp(text, "piece ", 6) && player_armor_globals.choice_count < PLAYER_ARMOR_MAXIMUM_CHOICES)
+		{
+			char *armor_id = armor_trim(text + 6);
+			char *region = armor_word(armor_id);
+			char *permutation = region ? armor_word(region) : NULL;
+
+			if (permutation && *permutation && strlen(armor_id) < PLAYER_ARMOR_ID_LENGTH &&
+				strlen(region) <= TAG_STRING_LENGTH && strlen(permutation) <= TAG_STRING_LENGTH)
+			{
+				struct player_armor_choice *choice = &player_armor_globals.choices[player_armor_globals.choice_count++];
+
+				armor_copy(choice->armor, armor_id, sizeof(choice->armor));
+				armor_copy(choice->region, region, sizeof(choice->region));
+				armor_copy(choice->permutation, permutation, sizeof(choice->permutation));
+			}
 		}
 	}
 	fclose(file);
@@ -334,6 +482,7 @@ static void armor_choice_read(void)
 static void armor_choice_write(void)
 {
 	FILE *file = fopen(PLAYER_ARMOR_CHOICE_FILE, "w");
+	short index;
 
 	if (!file)
 	{
@@ -341,7 +490,80 @@ static void armor_choice_write(void)
 		return;
 	}
 	fprintf(file, "%s\n", player_armor_globals.armors[player_armor_globals.selected].id);
+	for (index = 0; index < player_armor_globals.choice_count; index++)
+	{
+		struct player_armor_choice const *choice = &player_armor_globals.choices[index];
+
+		fprintf(file, "piece %s %s %s\n", choice->armor, choice->region, choice->permutation);
+	}
 	fclose(file);
+}
+
+/* the permutation chosen for the armor's region, else NULL */
+static char const *armor_choice_get(struct player_armor const *armor, char const *region)
+{
+	short index;
+
+	for (index = 0; index < player_armor_globals.choice_count; index++)
+	{
+		struct player_armor_choice const *choice = &player_armor_globals.choices[index];
+
+		if (!_stricmp(choice->armor, armor->id) && !_stricmp(choice->region, region))
+			return choice->permutation;
+	}
+	return NULL;
+}
+
+static void armor_choice_set(struct player_armor const *armor, char const *region, char const *permutation)
+{
+	struct player_armor_choice *choice = NULL;
+	short index;
+
+	for (index = 0; index < player_armor_globals.choice_count && !choice; index++)
+	{
+		if (!_stricmp(player_armor_globals.choices[index].armor, armor->id) &&
+			!_stricmp(player_armor_globals.choices[index].region, region))
+		{
+			choice = &player_armor_globals.choices[index];
+		}
+	}
+	if (!choice)
+	{
+		if (player_armor_globals.choice_count >= PLAYER_ARMOR_MAXIMUM_CHOICES)
+		{
+			/* (the oldest let go) */
+			csmemmove(&player_armor_globals.choices[0], &player_armor_globals.choices[1],
+				sizeof(player_armor_globals.choices[0]) * (PLAYER_ARMOR_MAXIMUM_CHOICES - 1));
+			player_armor_globals.choice_count--;
+		}
+		choice = &player_armor_globals.choices[player_armor_globals.choice_count++];
+		armor_copy(choice->armor, armor->id, sizeof(choice->armor));
+		armor_copy(choice->region, region, sizeof(choice->region));
+	}
+	armor_copy(choice->permutation, permutation, sizeof(choice->permutation));
+}
+
+/* the option of the piece worn: the one chosen, else the permutation the
+armor names for its region, else the first */
+static short armor_piece_option(struct player_armor const *armor, struct player_armor_piece const *piece)
+{
+	char const *chosen = armor_choice_get(armor, piece->region);
+	short index;
+
+	if (!chosen)
+	{
+		for (index = 0; index < armor->permutation_count; index++)
+		{
+			if (!_stricmp(armor->permutations[index].region, piece->region))
+				chosen = armor->permutations[index].permutation;
+		}
+	}
+	for (index = 0; chosen && index < piece->option_count; index++)
+	{
+		if (!_stricmp(piece->options[index].permutation, chosen))
+			return index;
+	}
+	return 0;
 }
 
 static void armor_catalog_ensure(void)
@@ -447,32 +669,96 @@ static short armor_region_index(long unit_index, char const *name)
 	return NONE;
 }
 
-static void armor_dress_unit(struct player_armor const *armor, short local_player_index, long unit_index)
+static void armor_dress_set(struct player_armor_dress *dress, char const *region, char const *permutation);
+
+/* what the armor puts on a unit: its biped, and the permutation of each
+region (its own, then the pieces chosen and the regions that go with them) */
+static void armor_dress_of(struct player_armor const *armor, struct player_armor_dress *dress)
 {
-	real_rgb_color color;
 	short index;
 
+	csmemset(dress, 0, sizeof(*dress));
+	armor_copy(dress->biped, armor->biped, sizeof(dress->biped));
+	dress->profile_color = armor->color == _player_armor_color_profile;
+
+	#define DRESS_SET(region_name, permutation_name) \
+		armor_dress_set(dress, (region_name), (permutation_name))
 	for (index = 0; index < armor->permutation_count; index++)
+		DRESS_SET(armor->permutations[index].region, armor->permutations[index].permutation);
+	for (index = 0; index < armor->piece_count; index++)
 	{
-		struct player_armor_permutation const *permutation = &armor->permutations[index];
-		short region_index = armor_region_index(unit_index, permutation->region);
+		struct player_armor_piece const *piece = &armor->pieces[index];
+
+		if (piece->option_count > 0)
+			DRESS_SET(piece->region, piece->options[armor_piece_option(armor, piece)].permutation);
+	}
+	for (index = 0; index < armor->follow_count; index++)
+	{
+		struct player_armor_piece const *piece = NULL;
+		short other;
+
+		for (other = 0; other < armor->piece_count; other++)
+		{
+			if (!_stricmp(armor->pieces[other].region, armor->follows[index].piece))
+				piece = &armor->pieces[other];
+		}
+		if (piece && piece->option_count > 0)
+			DRESS_SET(armor->follows[index].region, piece->options[armor_piece_option(armor, piece)].permutation);
+	}
+	#undef DRESS_SET
+}
+
+/* the dress's region (added, or its permutation changed) */
+static void armor_dress_set(struct player_armor_dress *dress, char const *region, char const *permutation)
+{
+	short index;
+
+	for (index = 0; index < dress->region_count; index++)
+	{
+		if (!_stricmp(dress->regions[index].region, region))
+			break;
+	}
+	if (index >= PLAYER_ARMOR_DRESS_REGIONS)
+		return;
+	if (index == dress->region_count)
+		dress->region_count++;
+	armor_copy(dress->regions[index].region, region, sizeof(dress->regions[index].region));
+	armor_copy(dress->regions[index].permutation, permutation, sizeof(dress->regions[index].permutation));
+}
+
+/* the dress's regions put on the unit (a region or permutation its model has
+not is left: logged), and, with color, its colour */
+static void armor_dress_apply(struct player_armor_dress const *dress, long unit_index, real_rgb_color const *color)
+{
+	short index;
+
+	for (index = 0; index < dress->region_count && index < PLAYER_ARMOR_DRESS_REGIONS; index++)
+	{
+		short region_index = armor_region_index(unit_index, dress->regions[index].region);
+		/* (object_permute_region takes no const name) */
+		char name[TAG_STRING_LENGTH + 1];
 
 		if (region_index == NONE)
 		{
-			error(_error_silent, "armor %s: %s has no region '%s'", armor->id,
-				tag_get_name(object_get(unit_index)->definition_index), permutation->region);
+			error(_error_silent, "armor: %s has no region '%s'", tag_get_name(object_get(unit_index)->definition_index),
+				dress->regions[index].region);
 			continue;
 		}
-		/* (object_permute_region takes no const name) */
-		{
-			char name[TAG_STRING_LENGTH + 1];
-
-			armor_copy(name, permutation->permutation, sizeof(name));
-			object_permute_region(unit_index, name, region_index, TRUE);
-		}
+		armor_copy(name, dress->regions[index].permutation, sizeof(name));
+		object_permute_region(unit_index, name, region_index, TRUE);
 	}
-	if (armor->color == _player_armor_color_profile && armor_profile_color(local_player_index, &color))
-		armor_color_unit(unit_index, &color);
+	if (color)
+		armor_color_unit(unit_index, color);
+}
+
+static void armor_dress_unit(struct player_armor const *armor, short local_player_index, long unit_index)
+{
+	struct player_armor_dress dress;
+	real_rgb_color color;
+
+	armor_dress_of(armor, &dress);
+	armor_dress_apply(&dress, unit_index,
+		dress.profile_color && armor_profile_color(local_player_index, &color) ? &color : NULL);
 }
 
 /* ---------- public code */
@@ -568,6 +854,83 @@ void player_armor_description(
 {
 	ustrncpy(text, armor_get(armor)->description, length - 1);
 	text[length - 1] = 0;
+}
+
+short player_armor_piece_count(
+	short armor)
+{
+	return armor_get(armor)->piece_count;
+}
+
+static struct player_armor_piece const *armor_piece_get(short armor, short piece)
+{
+	struct player_armor const *definition = armor_get(armor);
+
+	return piece >= 0 && piece < definition->piece_count ? &definition->pieces[piece] : NULL;
+}
+
+void player_armor_piece_name(
+	short armor,
+	short piece,
+	wchar_t *text,
+	short length)
+{
+	struct player_armor_piece const *definition = armor_piece_get(armor, piece);
+
+	text[0] = 0;
+	if (definition)
+	{
+		ustrncpy(text, definition->name[0] ? definition->name : L"?", length - 1);
+		text[length - 1] = 0;
+	}
+}
+
+short player_armor_option_count(
+	short armor,
+	short piece)
+{
+	struct player_armor_piece const *definition = armor_piece_get(armor, piece);
+
+	return definition ? definition->option_count : 0;
+}
+
+void player_armor_option_name(
+	short armor,
+	short piece,
+	short option,
+	wchar_t *text,
+	short length)
+{
+	struct player_armor_piece const *definition = armor_piece_get(armor, piece);
+
+	text[0] = 0;
+	if (definition && option >= 0 && option < definition->option_count)
+	{
+		ustrncpy(text, definition->options[option].name, length - 1);
+		text[length - 1] = 0;
+	}
+}
+
+short player_armor_option_worn(
+	short armor,
+	short piece)
+{
+	struct player_armor_piece const *definition = armor_piece_get(armor, piece);
+
+	return definition ? armor_piece_option(armor_get(armor), definition) : NONE;
+}
+
+void player_armor_option_choose(
+	short armor,
+	short piece,
+	short option)
+{
+	struct player_armor_piece const *definition = armor_piece_get(armor, piece);
+
+	if (!definition || option < 0 || option >= definition->option_count)
+		return;
+	armor_choice_set(armor_get(armor), definition->region, definition->options[option].permutation);
+	armor_choice_write();
 }
 
 boolean player_armor_available(

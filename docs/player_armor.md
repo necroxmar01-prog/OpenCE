@@ -41,6 +41,36 @@ permutation = helmet odst
 | `permutation` | `<region> <permutation>` of the unit's model, up to 8 lines. |
 | `addon` | An addon that brings the biped to every campaign level (`d:\addons\<addon>.map`): [addons.md](addons.md). |
 
+## Pieces
+
+An armor can have pieces chosen one by one, as Halo 3's helmet, chest and
+shoulders are. Each piece is a region of the biped's model, and each of its
+options a permutation of that region. ARMOR's PIECES button opens them for
+the armor on the list's row, and wears it. A row shows each piece with the
+option worn ("HELMET: EVA"); choosing one lists its options.
+
+```
+piece = helmet HELMET
+option = helmet mark_vi MARK VI
+option = helmet eva EVA
+follow = body chest
+```
+
+| Key | Meaning |
+| --- | --- |
+| `piece` | `<region> <name>`: a piece, up to 6. |
+| `option` | `<region> <permutation> <name>`: an option of the piece, up to 16 each. |
+| `follow` | `<region> <piece's region>`: a region worn as that piece is (the body with the chest). |
+
+The option worn is the one chosen, else the one the armor's `permutation`
+line names for the region, else the first. The choices are kept with the
+armor chosen, in `u:\armor.txt`, a line each (`piece <armor id> <region>
+<permutation>`), for every armor.
+
+opence-mods makes such an armor of a pack of several armors of one skeleton
+(halo3 spartans tags): its models cut by bone into one model with a region
+per piece and a permutation per armor (`armor_kit.py`).
+
 An armor whose biped the loaded level has not got is listed as `(NOT HERE)`,
 and the level's Spartan spawns instead (`debug.txt` says so). The armor's
 tags must be in the level's cache file, or come with an addon, which the

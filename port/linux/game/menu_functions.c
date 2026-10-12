@@ -1683,8 +1683,15 @@ static void armor_list_update(struct widget_instance *list)
 		wchar_t text[ARMOR_DESCRIPTION_LENGTH];
 		short length;
 
+		static wchar_t const pieces[] = L"\n\nPIECES: choose its helmet,\nchest and shoulders one by one.";
+
 		player_armor_description(armor_list.armor, text, ARMOR_DESCRIPTION_LENGTH);
 		length = (short)ustrlen(text);
+		if (player_armor_piece_count(armor_list.armor) > 0 && length + (short)NUMBEROF(pieces) <= ARMOR_DESCRIPTION_LENGTH)
+		{
+			ustrncpy(text + length, pieces, NUMBEROF(pieces));
+			length = (short)ustrlen(text);
+		}
 		if (!player_armor_available(armor_list.armor) &&
 			length + (short)NUMBEROF(missing) <= ARMOR_DESCRIPTION_LENGTH)
 		{
@@ -1699,6 +1706,153 @@ static void armor_list_update(struct widget_instance *list)
 static boolean armor_choose(void)
 {
 	player_armor_select(armor_list.armor);
+	return TRUE;
+}
+
+/* ---------- ARMOR's PIECES: an armor's pieces (Halo 3's helmet, chest and
+shoulders: player_armor.c), a row each with the one worn ("HELMET: EVA");
+choosing a row lists its options, and the one chosen is worn from the next
+mission on (or the next spawn) */
+
+#define PIECE_ROWS 6
+#define OPTION_ROWS 11
+
+static struct
+{
+	/* the armor, the piece chosen, and the options' first row and the
+	option on it */
+	short armor;
+	short piece;
+	short first;
+	short option;
+} armor_pieces;
+
+/* "port armor pieces open" (PIECES): the armor of the list's row, worn now,
+if it has pieces (else nothing opens) */
+static boolean armor_pieces_open(void)
+{
+	if (player_armor_piece_count(armor_list.armor) <= 0)
+		return FALSE;
+	armor_pieces.armor = armor_list.armor;
+	player_armor_select(armor_list.armor);
+	return TRUE;
+}
+
+static void armor_piece_row_text(short row, wchar_t *text)
+{
+	wchar_t name[ROW_TEXT_LENGTH];
+	wchar_t option[ROW_TEXT_LENGTH];
+	short length;
+
+	player_armor_piece_name(armor_pieces.armor, row, name, ROW_TEXT_LENGTH);
+	player_armor_option_name(armor_pieces.armor, row, player_armor_option_worn(armor_pieces.armor, row), option,
+		ROW_TEXT_LENGTH);
+	ustrncpy(text, name, ROW_TEXT_LENGTH - 1);
+	text[ROW_TEXT_LENGTH - 1] = 0;
+	length = (short)ustrlen(text);
+	if (length + 2 < ROW_TEXT_LENGTH)
+	{
+		ustrncpy(text + length, L": ", ROW_TEXT_LENGTH - length - 1);
+		ustrncpy(text + length + 2, option, ROW_TEXT_LENGTH - length - 3);
+		text[ROW_TEXT_LENGTH - 1] = 0;
+	}
+}
+
+static boolean armor_pieces_initialize(struct widget_instance *list)
+{
+	focus_row(list, 0);
+	return TRUE;
+}
+
+static void armor_pieces_update(struct widget_instance *list)
+{
+	struct widget_instance *description = list->parameters.list.extended_description;
+	short count = MIN(player_armor_piece_count(armor_pieces.armor), PIECE_ROWS);
+	short row = focused_row(list);
+	wchar_t text[ARMOR_DESCRIPTION_LENGTH];
+	short length;
+
+	if (row != NONE && row < count)
+		armor_pieces.piece = row;
+	rows_update(list, count, armor_piece_row_text);
+	player_armor_name(armor_pieces.armor, text, ARMOR_DESCRIPTION_LENGTH);
+	length = (short)ustrlen(text);
+	ustrncpy(text + length, L"\n\nChoose a piece to change it.\nWorn from the next mission on.",
+		ARMOR_DESCRIPTION_LENGTH - length - 1);
+	text[ARMOR_DESCRIPTION_LENGTH - 1] = 0;
+	text_set_length(named(description, "pieces_desc", 0), text, ARMOR_DESCRIPTION_LENGTH);
+	profile_name_show(description);
+}
+
+/* "port armor piece open": the piece of the row chosen, its options listed */
+static boolean armor_piece_open(struct widget_instance *list)
+{
+	short row = focused_row(list);
+
+	if (row == NONE || row >= player_armor_piece_count(armor_pieces.armor))
+		row = armor_pieces.piece;
+	if (row < 0 || row >= player_armor_piece_count(armor_pieces.armor) ||
+		player_armor_option_count(armor_pieces.armor, row) <= 0)
+	{
+		return FALSE;
+	}
+	armor_pieces.piece = row;
+	return TRUE;
+}
+
+static void armor_option_row_text(short row, wchar_t *text)
+{
+	short option = (short)(armor_pieces.first + row);
+	short length;
+
+	player_armor_option_name(armor_pieces.armor, armor_pieces.piece, option, text, ROW_TEXT_LENGTH);
+	length = (short)ustrlen(text);
+	if (option == player_armor_option_worn(armor_pieces.armor, armor_pieces.piece) && length < ROW_TEXT_LENGTH - 3)
+	{
+		/* (the one worn, as the armors' list marks the armor) */
+		csmemmove(text + 2, text, (length + 1) * sizeof(wchar_t));
+		text[0] = '*';
+		text[1] = ' ';
+	}
+}
+
+static boolean armor_options_initialize(struct widget_instance *list)
+{
+	short count = player_armor_option_count(armor_pieces.armor, armor_pieces.piece);
+
+	armor_pieces.option = PIN(player_armor_option_worn(armor_pieces.armor, armor_pieces.piece), 0, MAX(count - 1, 0));
+	armor_pieces.first = (short)PIN(armor_pieces.option - OPTION_ROWS / 2, 0, MAX(count - OPTION_ROWS, 0));
+	focus_row(list, (short)(armor_pieces.option - armor_pieces.first));
+	return TRUE;
+}
+
+static void armor_options_update(struct widget_instance *list)
+{
+	struct widget_instance *description = list->parameters.list.extended_description;
+	short count = player_armor_option_count(armor_pieces.armor, armor_pieces.piece);
+	short rows = MIN(count, OPTION_ROWS);
+	short option = list_scroll(list, &armor_pieces.first, count, rows);
+	wchar_t text[ARMOR_DESCRIPTION_LENGTH];
+	short length;
+
+	if (option != NONE)
+		armor_pieces.option = option;
+	rows_update(list, rows, armor_option_row_text);
+	player_armor_piece_name(armor_pieces.armor, armor_pieces.piece, text, ARMOR_DESCRIPTION_LENGTH);
+	length = (short)ustrlen(text);
+	ustrncpy(text + length, L"\n\n", ARMOR_DESCRIPTION_LENGTH - length - 1);
+	length = (short)ustrlen(text);
+	player_armor_option_name(armor_pieces.armor, armor_pieces.piece, armor_pieces.option, text + length,
+		(short)(ARMOR_DESCRIPTION_LENGTH - length));
+	text_set_length(named(description, "options_desc", 0), text, ARMOR_DESCRIPTION_LENGTH);
+	profile_name_show(description);
+}
+
+/* "port armor option select": the option chosen, worn from the next
+mission on */
+static boolean armor_option_choose(void)
+{
+	player_armor_option_choose(armor_pieces.armor, armor_pieces.piece, armor_pieces.option);
 	return TRUE;
 }
 
@@ -5778,6 +5932,26 @@ boolean pc_menu_event_function_invoke(
 		{
 			return armor_choose();
 		}
+		else if (!strcmp(name, "port armor pieces open"))
+		{
+			return armor_pieces_open();
+		}
+		else if (!strcmp(name, "port armor pieces initialize"))
+		{
+			return armor_pieces_initialize(widget);
+		}
+		else if (!strcmp(name, "port armor piece open"))
+		{
+			return armor_piece_open(widget);
+		}
+		else if (!strcmp(name, "port armor options initialize"))
+		{
+			return armor_options_initialize(widget);
+		}
+		else if (!strcmp(name, "port armor option select"))
+		{
+			return armor_option_choose();
+		}
 		else if (!strcmp(name, "controls binding slot"))
 		{
 			controls_screen.slot = (short)!controls_screen.slot;
@@ -5880,6 +6054,10 @@ void pc_menu_game_data_function_invoke(
 		color_list_update(widget);
 	else if (!strcmp(name, "port armor list update"))
 		armor_list_update(widget);
+	else if (!strcmp(name, "port armor pieces update"))
+		armor_pieces_update(widget);
+	else if (!strcmp(name, "port armor options update"))
+		armor_options_update(widget);
 	else if (!strcmp(name, "3wide player profile list update"))
 		profile_list_update(widget);
 	else if (!strcmp(name, "load game list update"))

@@ -344,6 +344,12 @@
 	<bitmap name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/header_armor">
 		<frame png="ce/port/main_menu/settings_select/player_setup/player_profile_edit/armor_edit/header_armor.png" width="512" height="64"/>
 	</bitmap>
+	<bitmap name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/header_armor_options">
+		<frame png="ce/port/main_menu/settings_select/player_setup/player_profile_edit/armor_edit/header_armor_options.png" width="512" height="64"/>
+	</bitmap>
+	<bitmap name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/header_armor_pieces">
+		<frame png="ce/port/main_menu/settings_select/player_setup/player_profile_edit/armor_edit/header_armor_pieces.png" width="512" height="64"/>
+	</bitmap>
 	<bitmap name="pause/pausebox_left">
 		<frame png="ce/port/pause/pausebox_left__0.png" width="16" height="256"/>
 		<frame png="ce/port/pause/pausebox_left__1.png" width="16" height="256"/>

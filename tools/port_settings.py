@@ -549,10 +549,65 @@ def _armor_screen() -> list:
     lines += _widget(f"{ARMOR}/armor_button_bar", [("type", "column_list"), ("width", 640), ("height", 28),
                                                    ("flags", "pass_unhandled_to_focused_child left_right_tabs_items")],
                      ['<data input="common button bar update"/>',
+                      f'<child widget="{ARMOR}/armor_button_pieces" x="250" y="1"/>',
                       f'<child widget="{ARMOR}/armor_button_ok" x="380" y="1"/>',
                       '<child widget="common_button_back" x="510" y="1"/>'])
     lines += _button(f"{ARMOR}/armor_button_ok", 1, ['<on event="a" run="emit custom activation event"/>',
                                                      '<on event="start" run="emit custom activation event"/>'])
+    # PIECES: an armor's pieces (Halo 3's helmet, chest, shoulders), each
+    # chosen from a list of its own; it wears the armor (an armor without
+    # pieces does nothing)
+    pieces_open = f'run="port armor pieces open" open="{ARMOR}/pieces_screen"'
+    lines += _widget(f"{ARMOR}/armor_button_pieces",
+                     [("type", "text"), ("width", 128), ("height", 24), ("bitmap", "bitmaps/text_button_background"),
+                      ("string_list", f"{ARMOR}/armor_button_pieces_caption"), ("font", "ui\\small_ui"),
+                      ("color", "#FFFFFFFF"), ("align", "center"), ("text_y", 2)],
+                     [f'<on event="a" {pieces_open}/>', f'<on event="start" {pieces_open}/>',
+                      '<on event="left_mouse" run="mouse emit accept event"/>'])
+    lines += _strings(f"{ARMOR}/armor_button_pieces_caption", ["PIECES"])
+    lines += _armor_list_screen("pieces", "header_armor_pieces", 6, "port armor pieces",
+                                f'run="port armor piece open" open="{ARMOR}/options_screen"', ok=False)
+    lines += _armor_list_screen("options", "header_armor_options", 11, "port armor options",
+                                'run="port armor option select" back="true"', ok=True)
+    return lines
+
+
+def _armor_list_screen(kind: str, header: str, rows: int, functions: str, activation: str, ok: bool) -> list:
+    """an armor's pieces (rows "HELMET: EVA"), or a piece's options: a list
+    like the armors', its words beside it ("<functions> initialize" when it is
+    made, "<functions> update" each frame, the activation of a row)"""
+    lines = _widget(f"{ARMOR}/{kind}_screen", [("width", 640), ("height", 480),
+                                               ("flags", "pass_unhandled_to_focused_child pause_game"),
+                                               ("bitmap", "bitmaps/gradient")],
+                    ['<child widget="main_menu/new_select/sel_list_desc_bkd"/>',
+                     f'<child widget="{ARMOR}/{kind}_list"/>',
+                     f'<child widget="{ARMOR}/{header}"/>'])
+    lines += _header(f"{ARMOR}/{header}", f"{ARMOR}/{header}")
+    items = [f'<child widget="main_menu/new_select/list_item_{index}" x="20" y="{73 + 30 * index}"/>'
+             for index in range(rows)]
+    lines += _widget(f"{ARMOR}/{kind}_list",
+                     [("type", "column_list"), ("width", 640), ("height", 480),
+                      ("flags", "pass_unhandled_to_focused_child up_down_tabs_children"),
+                      ("description", f"{ARMOR}/{kind}_extended_desc")],
+                     [f'<data input="{functions} update"/>',
+                      f'<on event="created" run="{functions} initialize"/>',
+                      f'<on event="custom_activation" {activation}/>',
+                      *items, f'<child widget="{ARMOR}/{kind}_button_bar" y="414"/>'])
+    lines += _widget(f"{ARMOR}/{kind}_extended_desc", [("width", 640), ("height", 480)],
+                     ['<child widget="main_menu/current_profile_name"/>',
+                      f'<child widget="{ARMOR}/{kind}_desc"/>'])
+    lines += _widget(f"{ARMOR}/{kind}_desc", [("type", "text"), ("controller", 1), ("left", 412), ("top", 85),
+                                              ("width", 216), ("height", 380), ("font", "ui\\small_ui"),
+                                              ("color", "#FF2896FF"), ("text_flags", "no_focus_test")], [])
+    buttons = ['<data input="common button bar update"/>']
+    if ok:
+        buttons.append(f'<child widget="{ARMOR}/{kind}_button_ok" x="380" y="1"/>')
+        lines += _button(f"{ARMOR}/{kind}_button_ok", 1, ['<on event="a" run="emit custom activation event"/>',
+                                                          '<on event="start" run="emit custom activation event"/>'])
+    buttons.append('<child widget="common_button_back" x="510" y="1"/>')
+    lines += _widget(f"{ARMOR}/{kind}_button_bar", [("type", "column_list"), ("width", 640), ("height", 28),
+                                                    ("flags", "pass_unhandled_to_focused_child left_right_tabs_items")],
+                     buttons)
     return lines
 
 
@@ -786,6 +841,8 @@ TITLES = {
     f"{MT}/coop/header_player_2": "PLAYER 2 PROFILE",
     f"{MT}/lobby/header_add_player": "ADD PLAYER",
     f"{PE}/armor_edit/header_armor": "SPARTAN ARMOR",
+    f"{PE}/armor_edit/header_armor_pieces": "ARMOR PIECES",
+    f"{PE}/armor_edit/header_armor_options": "CHOOSE A PIECE",
 }
 
 
