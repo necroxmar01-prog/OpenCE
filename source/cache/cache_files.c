@@ -1130,6 +1130,8 @@ boolean cache_files_map_present(
 	return FALSE;
 }
 
+boolean network_addons_pending(void);
+
 boolean cache_files_give_time_to_precache(
 	char const *map_name)
 {
@@ -1146,6 +1148,10 @@ boolean cache_files_give_time_to_precache(
 	/* port: a map being downloaded (port/linux/game/map_share.c) is not
 	there yet: precached once it is */
 	if (map_share_downloading(map_name))
+		return FALSE;
+	/* port: nor a co-op level before the host's addons are here (they are
+	grafted onto it as it loads: port/linux/game/network_addons.c) */
+	if (network_addons_pending())
 		return FALSE;
 	if (cache_files_precache_map_loaded(map_name))
 	{

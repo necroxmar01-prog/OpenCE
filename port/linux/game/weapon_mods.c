@@ -20,8 +20,8 @@ tag keeps its index, so everything that names it (the scenario's weapons,
 the AI's, the starting profiles, saved games) gets the mod's instead.
 
 A mod whose game tag is not in the level (a level without that weapon) is
-left out of it. Only a campaign level on this machine alone: in network
-co-op another machine would run the game's weapon.
+left out of it. A campaign level on this machine alone; in network co-op the
+host's weapon mods, which its players get from it (network_addons.c).
 */
 
 #include "cseries.h"
@@ -190,12 +190,19 @@ short weapon_mods_for_level(
 	struct weapon_mod *mods,
 	short maximum)
 {
+	if (game_engine_running() || game_connection() != _game_connection_local)
+		return 0;
+	return weapon_mods_read_all(mods, maximum);
+}
+
+short weapon_mods_read_all(
+	struct weapon_mod *mods,
+	short maximum)
+{
 	WIN32_FIND_DATAA data;
 	HANDLE find;
 	short count = 0;
 
-	if (game_engine_running() || game_connection() != _game_connection_local)
-		return 0;
 	/* (a handle of its own, not find_files_start: custom_edition_maps.c has
 	why) */
 	find = FindFirstFileA(WEAPON_MODS_FOLDER "*.*", &data);

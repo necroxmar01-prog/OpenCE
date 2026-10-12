@@ -60,6 +60,7 @@ weapons, grenades, health and shields.
 #include "game/game_globals.h"
 #include "game/game_engine.h"
 #include "game/players.h"
+#include "networking/network_game_globals.h"
 #include "cutscene/cinematics.h"
 #include "interface/player_ui.h"
 #include "items/weapons.h"
@@ -75,6 +76,8 @@ weapons, grenades, health and shields.
 #include "units/units.h"
 
 #include "player_armor.h"
+#include "network_addons.h"
+#include "network_coop.h"
 
 #include <xtl.h>
 #include <stdio.h>
@@ -981,6 +984,103 @@ long player_armor_unit_definition(
 	}
 	error(_error_silent, "armor %s: player %d spawns as %s", armor->id, local_player_index, armor->biped);
 	return biped_index;
+}
+
+/* network co-op's host (it spawns every player, and its objects go to the
+others as made, permutations and all: network_objects.c): the dress of a
+player, this machine's (the armor chosen here) or another's (what its
+machine sent: network_addons.c), else FALSE */
+static boolean armor_coop_dress(long player_index, short local_player_index, struct player_armor_dress *dress)
+{
+	if (!armor_campaign_map() || game_engine_running() || !network_coop_active() || network_game_distributed_client())
+		return FALSE;
+	if (local_player_index != NONE)
+	{
+		armor_dress_of(armor_get(player_armor_selected()), dress);
+		return TRUE;
+	}
+	return network_addons_player_dress(player_index, dress);
+}
+
+long player_armor_player_unit_definition(
+	long player_index,
+	short local_player_index,
+	long default_definition_index)
+{
+	struct player_armor_dress dress;
+	long biped_index;
+
+	if (!armor_coop_dress(player_index, local_player_index, &dress))
+		return player_armor_unit_definition(local_player_index, default_definition_index);
+	if (!dress.biped[0])
+		return default_definition_index;
+	biped_index = tag_loaded(BIPED_DEFINITION_TAG, dress.biped);
+	if (biped_index == NONE)
+	{
+		error(_error_silent, "armor: co-op player %ld's %s is not in this game; the level's Spartan spawns",
+			player_index, dress.biped);
+		return default_definition_index;
+	}
+	error(_error_silent, "armor: co-op player %ld spawns as %s", player_index, dress.biped);
+	return biped_index;
+}
+
+void player_armor_player_unit_created(
+	long player_index,
+	short local_player_index,
+	long unit_index)
+{
+	struct player_armor_dress dress;
+
+	if (unit_index == NONE)
+		return;
+	if (!armor_coop_dress(player_index, local_player_index, &dress))
+	{
+		player_armor_unit_created(local_player_index, unit_index);
+		return;
+	}
+	/* (the colours are co-op's: each player's profile's, players.c) */
+	if (dress.biped[0] && object_get(unit_index)->definition_index == tag_loaded(BIPED_DEFINITION_TAG, dress.biped))
+		armor_dress_apply(&dress, unit_index, NULL);
+}
+
+void player_armor_local_dress(
+	struct player_armor_dress *dress)
+{
+	armor_dress_of(armor_get(player_armor_selected()), dress);
+}
+
+short player_armor_network_addons(
+	char (*addons)[PLAYER_ARMOR_DRESS_NAME + 16],
+	char (*bipeds)[PLAYER_ARMOR_DRESS_BIPED],
+	short maximum)
+{
+	short count = 0;
+	short armor;
+
+	armor_catalog_ensure();
+	/* (the armor chosen, then those of pieces: one a player may wear) */
+	for (armor = NONE; armor < player_armor_globals.count && count < maximum; armor++)
+	{
+		struct player_armor const *definition =
+			armor == NONE ? armor_get(player_armor_selected()) : &player_armor_globals.armors[armor];
+		short other;
+		boolean listed = FALSE;
+
+		if (!definition->addon[0] || !definition->biped[0] || (armor != NONE && definition->piece_count <= 0))
+			continue;
+		for (other = 0; other < count; other++)
+		{
+			if (!_stricmp(addons[other], definition->addon))
+				listed = TRUE;
+		}
+		if (listed)
+			continue;
+		armor_copy(addons[count], definition->addon, sizeof(addons[0]));
+		armor_copy(bipeds[count], definition->biped, sizeof(bipeds[0]));
+		count++;
+	}
+	return count;
 }
 
 void player_armor_unit_created(

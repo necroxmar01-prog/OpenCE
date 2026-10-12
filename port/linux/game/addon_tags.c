@@ -48,6 +48,7 @@ a weapon is the game's.
 #include "addon_tags.h"
 #include "player_armor.h"
 #include "weapon_mods.h"
+#include "network_addons.h"
 #include "../../third_party/zlib/zlib_prefixed.h"
 
 #include <xtl.h>
@@ -76,8 +77,9 @@ enum
 	/* the largest addon read: a character's tags and pixels (each addon's
 	offsets have ADDON_GRAFT_FILE_SPAN) */
 	ADDON_TAGS_MAXIMUM_FILE_SIZE = (long)ADDON_GRAFT_FILE_SPAN,
-	/* the armor's and the weapon mods' */
-	ADDON_TAGS_MAXIMUM_ADDONS = 1 + WEAPON_MODS_MAXIMUM,
+	/* the armor's (in network co-op, a few: those a player may wear) and the
+	weapon mods' */
+	ADDON_TAGS_MAXIMUM_ADDONS = 4 + WEAPON_MODS_MAXIMUM,
 	ADDON_TAGS_GROUP_BIPED = 'bipd',
 	ADDON_TAGS_MAP_TYPE_CAMPAIGN = 0,
 };
@@ -243,16 +245,35 @@ static byte *addon_tags_file_read(
 /* the addon read, checked by the validator where the level's tags go
 (tag_cache), and moved to memory of its own; FALSE (logged, let go) if it
 cannot be */
+static boolean addon_tags_read_addon_at(
+	void *tag_cache,
+	struct addon_tags_addon *addon,
+	char const *name,
+	char const *file_path);
+
 static boolean addon_tags_read_addon(
 	void *tag_cache,
 	struct addon_tags_addon *addon,
 	char const *name)
 {
+	return addon_tags_read_addon_at(tag_cache, addon, name, NULL);
+}
+
+/* (file_path: the addon's file, else d:\addons\<name>.map) */
+static boolean addon_tags_read_addon_at(
+	void *tag_cache,
+	struct addon_tags_addon *addon,
+	char const *name,
+	char const *file_path)
+{
 	char path[MAX_PATH];
 	char reason[400];
 	struct addon_tags_file_header const *header;
 
-	csprintf(path, "%s%s%s", ADDON_TAGS_FOLDER, name, ADDON_TAGS_EXTENSION);
+	if (file_path)
+		strncpy(path, file_path, sizeof(path) - 1), path[sizeof(path) - 1] = 0;
+	else
+		csprintf(path, "%s%s%s", ADDON_TAGS_FOLDER, name, ADDON_TAGS_EXTENSION);
 	strncpy(addon->name, name, sizeof(addon->name) - 1);
 	addon->file = addon_tags_file_read(path, &addon->file_length);
 	if (!addon->file)
@@ -306,6 +327,45 @@ boolean addon_tags_prepare(
 	addon_tags_release();
 	if (map_type != ADDON_TAGS_MAP_TYPE_CAMPAIGN)
 		return FALSE;
+
+	/* network co-op: the host's, in its order, on every machine
+	(network_addons.c) */
+	{
+		static struct network_addon_load network[NETWORK_ADDONS_MAXIMUM];
+		short network_count = network_addons_for_level(network, ADDON_TAGS_MAXIMUM_ADDONS);
+
+		if (network_count != NONE)
+		{
+			short weapon_count = 0;
+
+			for (index = 0; index < network_count; index++)
+			{
+				struct addon_tags_addon *addon = &addon_tags.addons[addon_tags.addon_count];
+
+				addon->weapon_mod = NONE;
+				if (network[index].weapon)
+				{
+					if (weapon_count >= WEAPON_MODS_MAXIMUM)
+						continue;
+					addon_tags.weapon_mods[weapon_count] = network[index].weapon_mod;
+					addon->weapon_mod = weapon_count++;
+				}
+				addon->root_group = network[index].root_group;
+				strncpy(addon->root, network[index].root, sizeof(addon->root) - 1);
+				addon->file_base = ADDON_GRAFT_FILE_BASE + addon_tags.addon_count * ADDON_GRAFT_FILE_SPAN;
+				addon_tags.addon_count++;
+				if (!addon_tags_read_addon_at(tag_cache, addon, network[index].name, network[index].path))
+				{
+					/* (the others' tables would not be this one's: logged) */
+					error(_error_silent, "addon: co-op's %s cannot be read: this machine's tags are not the host's",
+						network[index].name);
+					addon_tags_release_addon(addon);
+					addon_tags.addon_count--;
+				}
+			}
+			return addon_tags.addon_count > 0;
+		}
+	}
 
 	/* the armor's, then each weapon mod's */
 	if (player_armor_addon(name, sizeof(name), addon_tags.addons[0].root, sizeof(addon_tags.addons[0].root)))

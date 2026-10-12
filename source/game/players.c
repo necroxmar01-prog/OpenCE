@@ -1453,7 +1453,8 @@ static void player_spawn(
 					unit_definition_index = player_information->player_unit.index;
 					/* port: the armor chosen in the menus, in a campaign game
 					on this machine alone (player_armor.c) */
-					unit_definition_index = player_armor_unit_definition(
+					unit_definition_index = player_armor_player_unit_definition(
+						player_index,
 						player->local_player_index,
 						unit_definition_index);
 				}
@@ -1478,7 +1479,7 @@ static void player_spawn(
 					players_coop_color_unit(unit_index, &change_color);
 				/* port: the armor's regions and colour (player_armor.c) */
 				if (unit_index != NONE && !game_engine_running())
-					player_armor_unit_created(player->local_player_index, unit_index);
+					player_armor_player_unit_created(player_index, player->local_player_index, unit_index);
 				if (unit_index != NONE)
 				{
 					unit = unit_try_and_get(unit_index);

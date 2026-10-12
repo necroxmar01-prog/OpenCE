@@ -77,6 +77,7 @@ machine (their datum identifiers need not be).
 #include "network_distributed.h"
 #include "network_voice.h"
 #include "map_share.h"
+#include "network_addons.h"
 #include "profile_sections.h"
 
 #include <limits.h>
@@ -3983,6 +3984,13 @@ void network_distributed_handle_message(
 	if (map_share_handles_message(message, size))
 	{
 		map_share_handle_message(machine_index, message, size, machine_index != NONE ?
+			distributed_handling_stream_message : !network_connection_last_read_was_unreliable());
+		return;
+	}
+	/* (co-op's addons and armors, the same way: network_addons.c) */
+	if (network_addons_handles_message(message, size))
+	{
+		network_addons_handle_message(machine_index, message, size, machine_index != NONE ?
 			distributed_handling_stream_message : !network_connection_last_read_was_unreliable());
 		return;
 	}

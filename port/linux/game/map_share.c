@@ -63,6 +63,7 @@ the host does not drop a machine that says it is downloading.
 #include "custom_edition_cache.h"
 #include "custom_edition_maps.h"
 #include "map_share.h"
+#include "network_addons.h"
 #include "../src/p2p.h"
 
 #include <stdio.h>
@@ -585,7 +586,10 @@ static boolean map_share_sending(
 {
 	struct network_game *game = map_share_network_game();
 
-	if (!game || !custom_edition_level_name(game->map.name) || network_game_client_get_local_machine_index() == NONE)
+	if (!game || network_game_client_get_local_machine_index() == NONE)
+		return FALSE;
+	/* (a Custom Edition map's files, or co-op's addons: network_addons.c) */
+	if (!custom_edition_level_name(game->map.name) && network_addons_catalog_file(0) == NONE)
 		return FALSE;
 	return map_share_host() ? config_boolean("network.map_share") != 0 : config_boolean("network.map_seed") != 0;
 }
@@ -680,6 +684,15 @@ static short current_file_with_hash(
 
 		if (file && file->ready && !csmemcmp(file->hash, hash, MAP_SHARE_HASH_BYTES))
 			return globals->current_files[kind];
+	}
+	/* (co-op's addons: network_addons.c) */
+	for (kind = 0; kind < NETWORK_ADDONS_MAXIMUM; kind++)
+	{
+		short catalog = network_addons_catalog_file(kind);
+		struct map_share_file *file = map_share_file_get(catalog);
+
+		if (file && file->ready && !csmemcmp(file->hash, hash, MAP_SHARE_HASH_BYTES))
+			return catalog;
 	}
 	return NONE;
 }
@@ -1282,6 +1295,45 @@ boolean map_share_download_begin(
 	return TRUE;
 }
 
+boolean map_share_addon_download_begin(
+	char const *level_name)
+{
+	struct download *download = &map_share_globals.download;
+	char const *name = level_name + strlen(NETWORK_ADDONS_LEVEL_PREFIX);
+
+	if (!network_addons_level_name(level_name) || csstrlen(level_name) >= LEVEL_NAME_BYTES || map_share_host() ||
+		!global_network_game_client_get() || !map_share_name_safe(name) || !map_share_name_hashed(name))
+	{
+		return FALSE;
+	}
+	if (download->state == _download_asking || download->state == _download_transferring)
+		return !csstrcmp(download->level_name, level_name);
+	{
+		static long serial;
+
+		csmemset(download, 0, sizeof(*download));
+		download->serial = ++serial;
+	}
+	download->state = _download_asking;
+	level_name_copy(download->level_name, level_name);
+	snprintf(download->message, sizeof(download->message), "The host's mod %s could not be downloaded.", name);
+	download->wanted = (byte)FLAG(_map_share_file_map);
+	download->asked_at = system_milliseconds();
+	download->progress_at = download->asked_at;
+	error(_error_silent, "map sharing: asking the host for %s", level_name);
+	download_ask();
+	return TRUE;
+}
+
+boolean map_share_download_idle(
+	void)
+{
+	struct download *download = &map_share_globals.download;
+
+	return download->state != _download_asking && download->state != _download_transferring &&
+		download->state != _download_failed;
+}
+
 boolean map_share_downloading(
 	char const *level_name)
 {
@@ -1303,6 +1355,9 @@ boolean map_share_holds_players(
 	if (!map_share_host() && game && !game->map.name[0])
 		return TRUE;
 	/* (failed: the game is being left) */
+	/* (co-op's addons not all here: network_addons.c) */
+	if (network_addons_pending())
+		return TRUE;
 	return download->state == _download_asking || download->state == _download_failed ||
 		(download->state == _download_transferring && download->in_progress);
 }
@@ -1402,7 +1457,13 @@ static void download_offered(
 			return;
 		}
 		offered |= (byte)FLAG(file->kind);
-		if (file->kind == _map_share_file_map)
+		if (network_addons_level_name(download->level_name))
+		{
+			/* (co-op's addon: where network_addons.c looks for it) */
+			CreateDirectoryA("d:\\shared_addons", NULL);
+			snprintf(file->final_path, sizeof(file->final_path), "%s%s.map", NETWORK_ADDONS_FOLDER, name);
+		}
+		else if (file->kind == _map_share_file_map)
 		{
 			snprintf(file->final_path, sizeof(file->final_path), "%s%s.map", CUSTOM_EDITION_MAP_DIRECTORY, name);
 		}
@@ -1627,8 +1688,12 @@ static void download_finish(
 			return;
 		}
 	}
-	custom_edition_maps_look_again();
-	if (!custom_edition_cache_present(download->level_name, download->version, message, sizeof(message)))
+	if (network_addons_level_name(download->level_name))
+		network_addons_downloaded(download->level_name);
+	else
+		custom_edition_maps_look_again();
+	if (!network_addons_level_name(download->level_name) &&
+		!custom_edition_cache_present(download->level_name, download->version, message, sizeof(message)))
 	{
 		csstrncpy(download->message, message, sizeof(download->message) - 1);
 		download_fail("The map was downloaded, but cannot be played.");
@@ -2760,6 +2825,28 @@ static void host_request(
 		host_offer(machine_index, _offer_off);
 		return;
 	}
+	/* (co-op's addon, one of those the host offers: network_addons.c) */
+	if (network_addons_level_name(request->level_name))
+	{
+		if (!network_addons_host_path(request->level_name, path, sizeof(path)) ||
+			!TEST_FLAG(request->wanted, _map_share_file_map))
+		{
+			host_offer(machine_index, _offer_unavailable);
+			return;
+		}
+		machine->catalog_files[0] = map_share_file_hash(path, _map_share_file_map);
+		machine->file_kinds[0] = _map_share_file_map;
+		machine->file_count = machine->catalog_files[0] != NONE ? 1 : 0;
+		if (!machine->file_count)
+		{
+			host_offer(machine_index, _offer_unavailable);
+			return;
+		}
+		machine->asked = TRUE;
+		machine->downloading = TRUE;
+		error(_error_silent, "map sharing: machine #%ld asks for the addon %s", machine_index, request->level_name);
+		return;
+	}
 	/* (the game's map alone, a Custom Edition map's, named for its hash if
 	it is asked for) */
 	name = tag_name_strip_path(request->level_name);
@@ -3004,6 +3091,8 @@ void map_share_update(
 	short index;
 
 	map_share_files_update();
+	/* (co-op's addons: network_addons.c) */
+	network_addons_update();
 	/* (internet play: a player that shares answers the others, who reach it
 	by its key hash) */
 	p2p_set_answering_players(!map_share_host() && address_internet(host_address) && map_share_sending());

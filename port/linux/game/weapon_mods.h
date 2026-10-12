@@ -46,6 +46,12 @@ short weapon_mods_for_level(
 	struct weapon_mod *mods,
 	short maximum);
 
+/* every weapon mod of the weapons folder, wherever it is played (the host
+of a network co-op game offers them: network_addons.c); how many */
+short weapon_mods_read_all(
+	struct weapon_mod *mods,
+	short maximum);
+
 /* a tag group for a file extension (".weapon": 'weap'), or 0 */
 unsigned long weapon_mods_group_from_extension(
 	char const *extension);

@@ -143,8 +143,34 @@ mod tag's data. The game tag keeps its index and name, so everything that
 names it gets the mod's weapon: the scenario's weapons, the AI's, the
 starting profiles and saved games.
 
-Weapon mods apply only to a campaign level on this machine alone. In
-network co-op the other machines would run the game's weapon.
+Weapon mods apply to a campaign level on this machine alone, and in network
+co-op the host's apply on every machine (below).
+
+## Network co-op
+
+The distributed netcode names tags by index, so every machine of a co-op
+game must graft the same addons in the same order. They are the host's
+(`port/linux/game/network_addons.c`):
+
+- The host offers the addon of the armor it chose, those of its armors of
+  pieces (any player may wear one) and its weapon mods, each hashed as map
+  sharing hashes maps. In the lobby the set follows what the host has; once
+  the level loads it is fixed, and a machine that joins later is told of
+  that one.
+- Each client is told of them (`_distributed_message_addons`, an addon a
+  message, reliably) and keeps them in `d:\shared_addons\<name>_<hash>.map`.
+  One it has not is downloaded from the host and the other players as a
+  Custom Edition map is (`map_share.c`, level name `addons\<name>_<hash>`).
+  Until it has them all its level is not precached, so the lobby waits for
+  it, and a game in progress is joined once they are here.
+- Each client sends the armor it chose (`_distributed_message_armor_dress`:
+  the biped and each region's permutation, pieces included). The host spawns
+  that machine's player in it, and the unit reaches every machine as the host
+  made it. A biped the game has not (an armor whose addon the host does not
+  offer) spawns the level's Spartan; colours are co-op's own (each profile's).
+
+A host of a build without this tells of none: after 15 seconds its clients
+load the level as it is.
 
 ## Limits
 

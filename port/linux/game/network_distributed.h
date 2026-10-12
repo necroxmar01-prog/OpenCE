@@ -125,6 +125,10 @@ enum
 	_distributed_message_map_share_offer = 84,
 	_distributed_message_map_share_sources = 85,
 	_distributed_message_map_share_progress = 86,
+	/* network co-op's addons and armors (network_addons.c), in the lobby
+	too, reliably: the host's addons, one a message; a client's armor */
+	_distributed_message_addons = 87,
+	_distributed_message_armor_dress = 88,
 
 	NUMBER_OF_DISTRIBUTED_MESSAGES
 };

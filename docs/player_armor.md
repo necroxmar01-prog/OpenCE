@@ -86,8 +86,9 @@ game grafts onto each campaign level as it loads ([addons.md](addons.md)).
   play is left as it is.
 
 Not in multiplayer, whose units are the game engine's (the globals'
-multiplayer unit), nor in network co-op, whose other machines would not know
-of it.
+multiplayer unit). In network co-op the host spawns every player in the
+armor their machine chose, among those whose addons the host offers
+([addons.md](addons.md), "Network co-op").
 
 The choice is this machine's, for every profile, kept in the saves as the
 armor's id (`u:\armor.txt`).
