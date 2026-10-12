@@ -816,22 +816,45 @@ static char *config_default_text(void)
 		"# it to go back to them. Each setting can also be set for one run with\n"
 		"# the environment variable named with it, which wins over this file.\n");
 #endif
+	/* each section once, with all its settings, in the order the sections
+	first appear in the table: a table can come back to a section (a
+	setting added beside its kind), and a TOML file may open a table only
+	once (a second [display] made the whole file unreadable) */
 	for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS; index++)
 	{
 		const struct config_setting *setting = &config_settings[index];
 		const char *dot = strchr(setting->name, '.');
+		size_t length;
+		size_t earlier;
+		size_t member;
+		int seen = 0;
 		char buffer[64];
 
 		if (!(setting->platforms & CONFIG_PLATFORM) || !dot)
 			continue;
-		if (strncmp(section, setting->name, (size_t)(dot - setting->name)) ||
-			section[dot - setting->name] != 0)
+		length = (size_t)(dot - setting->name);
+		for (earlier = 0; earlier < index && !seen; earlier++)
 		{
-			snprintf(section, sizeof(section), "%.*s", (int)(dot - setting->name), setting->name);
-			snprintf(buffer, sizeof(buffer), "\n[%s]\n", section);
-			config_append(&text, buffer);
+			const struct config_setting *other = &config_settings[earlier];
+
+			seen = (other->platforms & CONFIG_PLATFORM) && strchr(other->name, '.') == other->name + length &&
+				!strncmp(other->name, setting->name, length);
 		}
-		config_append_setting(&text, setting);
+		if (seen)
+			continue;
+		snprintf(section, sizeof(section), "%.*s", (int)length, setting->name);
+		snprintf(buffer, sizeof(buffer), "\n[%s]\n", section);
+		config_append(&text, buffer);
+		for (member = index; member < NUMBER_OF_CONFIG_SETTINGS; member++)
+		{
+			const struct config_setting *other = &config_settings[member];
+
+			if ((other->platforms & CONFIG_PLATFORM) && strchr(other->name, '.') == other->name + length &&
+				!strncmp(other->name, setting->name, length))
+			{
+				config_append_setting(&text, other);
+			}
+		}
 	}
 	return text.buffer;
 }
