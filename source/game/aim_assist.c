@@ -65,6 +65,7 @@ symbols in this file:
 #include "units/bipeds.h"
 #include "units/unit_definitions.h"
 #include "units/units.h"
+#include "shoulder_camera.h" /* port: port/linux/game/shoulder_camera.c */
 
 /* ---------- constants */
 
@@ -618,10 +619,19 @@ long player_aim_projectile(
 		/* Blend toward the autoaim target, then pin inside the deviation cone. */
 		{
 			real_vector3d desired_direction;
+			real deviation_angle= parameters.deviation_angle;
 
+			/* port: over the shoulder (port/linux/game/shoulder_camera.c) the
+			weapon is off the camera's line, a hand's breadth to the side: near
+			things want a wider turn from the weapon's own line to meet the
+			crosshair */
+			if (shoulder_camera_wanted_for_unit(player->unit_index))
+			{
+				deviation_angle= MAX(deviation_angle, DEGREES_TO_RADIANS(25.f));
+			}
 			fast_normals_interpolate(&collision_direction, &target_direction, autoaim_level, &desired_direction);
-			pin_normal_to_cone3d(&desired_direction, direction, sine(parameters.deviation_angle),
-				cosine(parameters.deviation_angle), direction);
+			pin_normal_to_cone3d(&desired_direction, direction, sine(deviation_angle),
+				cosine(deviation_angle), direction);
 		}
 	}
 

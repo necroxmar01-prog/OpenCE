@@ -311,6 +311,13 @@ static const struct config_setting config_settings[] =
 	{ "display.first_person_legs", _config_boolean, "false", "HALO_FIRST_PERSON_LEGS", _environment_value, _platform_all,
 		"Your own legs in first person, seen looking down: your body as others\n"
 		"see it, drawn from the waist down, moving as it moves." },
+	{ "display.camera", _config_string, "\"first_person\"", "HALO_CAMERA", _environment_value, _platform_all,
+		"The view on foot in a campaign: \"first_person\" (the game's own), or\n"
+		"over the shoulder, as in Resident Evil 6, \"shoulder_right\" or\n"
+		"\"shoulder_left\": the body is drawn holding the weapon, shots go where\n"
+		"the crosshair points, and a scope looks through the eye. Multiplayer,\n"
+		"network co-op and vehicles keep their own views\n"
+		"(port/linux/game/shoulder_camera.c)." },
 	{ "display.shield_glow", _config_boolean, "false", "HALO_SHIELD_GLOW", _environment_value, _platform_all,
 		"Energy shields light what is around them as they flare, as plasma\n"
 		"does, in the shield's own color." },

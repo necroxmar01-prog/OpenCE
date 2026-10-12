@@ -26,7 +26,7 @@ end.
 | `port/third_party/` | Vendored libraries, each with a README naming its upstream, version and checksum |
 | `port/tools/` | Stand-alone tools (`cache_file_report.c`) |
 | `tools/` | Build scripts (`linux_build.py`, `windows_build.py`, `android_build.py`, `web_build.py`, `ci_build.py`, `web_serve.py`), generators (`ce_menus.py`, `port_settings.py`, `hud_assets.py`, `title_assets.py`, `embed_assets.py`, `xdk_headers.py`) and tests |
-| `docs/` | Longer design notes (`custom_edition_caches.md`, `player_armor.md`, `addons.md`) |
+| `docs/` | Longer design notes (`custom_edition_caches.md`, `player_armor.md`, `addons.md`, `shoulder_camera.md`) |
 | `pgo/` | Profile-guided optimisation profiles |
 | `assets/` | Game data for local runs (gitignored: `maps/`, `custom_maps/`) |
 | `.github/workflows/` | CI: builds every platform on each push, publishes releases from `main` |
@@ -218,6 +218,7 @@ as documentation of file formats, never copied.
 | [docs/custom_edition_caches.md](docs/custom_edition_caches.md) | Loading and converting Custom Edition maps, and the evidence for each layout |
 | [docs/player_armor.md](docs/player_armor.md) | The campaign Spartan's armor: the ARMOR menu, the `armors` folder's files, when it applies |
 | [docs/addons.md](docs/addons.md) | Addons: a character mod's biped grafted onto each campaign level as it loads, and how to build and check one |
+| [docs/shoulder_camera.md](docs/shoulder_camera.md) | The over-the-shoulder camera on foot in a campaign: the body in view, shots through the crosshair, walls, when it keeps first person |
 | [port/assets/menus/README.md](port/assets/menus/README.md) | The menu files' format and how to write them again |
 | [port/assets/menus/NON_HANDDRAWN.md](port/assets/menus/NON_HANDDRAWN.md) | Menu pictures that are not redraws |
 | [port/assets/menus/UNWIRED.md](port/assets/menus/UNWIRED.md) | Menu functions that do nothing yet |

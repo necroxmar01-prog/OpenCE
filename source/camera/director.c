@@ -122,6 +122,7 @@ symbols in this file:
 #include "camera_scripting.h"
 #include "dead_camera.h"
 #include "coop_spectate.h" /* port: port/linux/game/coop_spectate.c */
+#include "shoulder_camera.h" /* port: port/linux/game/shoulder_camera.c */
 #include "editor_flying_camera.h"
 #include "first_person_camera.h"
 #include "flying_camera.h"
@@ -309,7 +310,10 @@ director_perspective director_get_perspective(
 		if (camera->camera_change_pause == 0.f)
 			camera->perspective = 0;
 	}
-	else if (camera->camera_proc == following_camera_update)
+	/* port: the over-the-shoulder camera (port/linux/game/shoulder_camera.c)
+	is a third-person view, as a vehicle's */
+	else if (camera->camera_proc == following_camera_update ||
+		camera->camera_proc == (director_camera_update_proc)shoulder_camera_update)
 	{
 		camera->perspective = 1;
 	}
@@ -611,6 +615,40 @@ static void director_rotate_cameras(
 	return;
 }
 
+/* port: on foot, first person or over the shoulder (display.camera,
+port/linux/game/shoulder_camera.c) */
+static boolean director_on_foot_camera(
+	director_camera_update_proc camera_proc)
+{
+	return camera_proc == (director_camera_update_proc)first_person_camera_update ||
+		camera_proc == (director_camera_update_proc)shoulder_camera_update;
+}
+
+static void director_set_on_foot_camera(
+	short local_player_index,
+	boolean interpolate)
+{
+	struct director *director = director_get(local_player_index);
+
+	if (shoulder_camera_wanted(local_player_index))
+	{
+		shoulder_camera_new((struct shoulder_camera *)director->camera_data);
+		director_set_camera(
+			local_player_index,
+			(director_camera_update_proc)shoulder_camera_update,
+			interpolate);
+	}
+	else
+	{
+		first_person_camera_new((struct first_person_camera *)director->camera_data);
+		director_set_camera(
+			local_player_index,
+			(director_camera_update_proc)first_person_camera_update,
+			interpolate);
+	}
+	return;
+}
+
 static void director_choose_game_perspective(
 	short local_player_index,
 	boolean force)
@@ -622,6 +660,16 @@ static void director_choose_game_perspective(
 
 	unit_index = player_control_get_unit_index(local_player_index);
 	following = director_desired_perspective(unit_index, &perspective);
+	/* port: on foot, the camera the setting, the scope and the body ask for
+	now: from one to the other in a third of a second */
+	if (!force && !following && director->seat_state == perspective &&
+		director_on_foot_camera(director->camera_proc) &&
+		shoulder_camera_wanted(local_player_index) !=
+			(director->camera_proc == (director_camera_update_proc)shoulder_camera_update))
+	{
+		director_set_on_foot_camera(local_player_index, TRUE);
+		director->camera_change_pause = 0.3f;
+	}
 	if (force || director->seat_state != perspective)
 	{
 		if (following == TRUE)
@@ -637,11 +685,7 @@ static void director_choose_game_perspective(
 		}
 		else if (force || director->camera_proc == (director_camera_update_proc)following_camera_update)
 		{
-			first_person_camera_new((struct first_person_camera *)director->camera_data);
-			director_set_camera(
-				local_player_index,
-				(director_camera_update_proc)first_person_camera_update,
-				!force);
+			director_set_on_foot_camera(local_player_index, !force);
 		}
 
 		director->seat_state = perspective;
@@ -829,8 +873,7 @@ static boolean director_update_controls(
 			last_ticks[local_player_index] = ticks;
 		}
 
-		if (director->camera_proc !=
-				(director_camera_update_proc)first_person_camera_update &&
+		if (!director_on_foot_camera(director->camera_proc) &&
 			director->camera_proc !=
 				(director_camera_update_proc)following_camera_update)
 		{
@@ -880,8 +923,7 @@ static boolean director_update_controls(
 		struct mouse_state const *mouse = input_get_mouse_state();
 
 		switch_camera = input_key_is_down(_key_backspace) == TRUE;
-		if ((director->camera_proc !=
-				(director_camera_update_proc)first_person_camera_update &&
+		if ((!director_on_foot_camera(director->camera_proc) &&
 			mouse->buttons[1]) || input_key_is_down(_key_tab))
 		{
 			SET_FLAG(control_flags, _camera_control_forward_bit,
@@ -1077,7 +1119,11 @@ short director_camera_deterministic(
 	short following;
 
 	following = director_desired_perspective(unit_index, &perspective);
-	if (!following)
+	/* port: over the shoulder, shots go where the crosshair in the middle of
+	that view points (port/linux/game/shoulder_camera.c) */
+	if (!following && shoulder_camera_wanted_for_unit(unit_index))
+		shoulder_camera_deterministic(unit_index, position, forward);
+	else if (!following)
 		first_person_camera_deterministic(unit_index, position, forward);
 	else
 		following_camera_deterministic(unit_index, position, forward);

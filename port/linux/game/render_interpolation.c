@@ -50,6 +50,7 @@ unsigned long config_changes(void);
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include "shoulder_camera.h"
 
 /* ---------- constants */
 
@@ -692,14 +693,20 @@ static struct observer_result const *render_interpolation_direct_camera(
 	static unsigned long read_at = (unsigned long)-1;
 	struct observer_result *direct;
 	long unit_index;
+	real_vector3d facing;
+	boolean shoulder;
 
 	if (read_at != config_changes())
 	{
 		read_at = config_changes();
 		enabled = config_boolean("display.direct_camera");
 	}
+	/* (over the shoulder, port/linux/game/shoulder_camera.c: the camera
+	swings round the eye as the view turns) */
+	shoulder = director_get_perspective(local_player_index) == _director_perspective_third_person &&
+		shoulder_camera_wanted(local_player_index);
 	if (!enabled || !observer ||
-		director_get_perspective(local_player_index) != _director_perspective_first_person ||
+		(director_get_perspective(local_player_index) != _director_perspective_first_person && !shoulder) ||
 		director_inhibited_facing(local_player_index) ||
 		cinematic_in_progress())
 	{
@@ -711,7 +718,10 @@ static struct observer_result const *render_interpolation_direct_camera(
 
 	direct = &direct_cameras[local_player_index];
 	*direct = *observer;
-	player_control_get_facing_direction(local_player_index, &direct->forward);
+	player_control_get_facing_direction(local_player_index, &facing);
+	if (shoulder)
+		shoulder_camera_direct(local_player_index, direct, &facing);
+	direct->forward = facing;
 	observer_up_from_forward(&direct->forward, &direct->up);
 	return direct;
 #endif
