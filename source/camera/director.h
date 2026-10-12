@@ -135,6 +135,11 @@ boolean director_inhibited_input(
 	short local_player_index);
 director_perspective director_get_perspective(
 	short local_player_index);
+/* port: whether the local player's camera is the one over the shoulder
+(port/linux/game/shoulder_camera.c): the body seen, the first-person weapon
+not drawn but its sounds heard, the flashlight from the eye */
+boolean director_port_shoulder_camera(
+	short local_player_index);
 short director_desired_perspective(
 	long unit_index,
 	director_perspective *perspective);

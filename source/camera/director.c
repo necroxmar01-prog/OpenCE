@@ -298,6 +298,13 @@ boolean director_inhibited_input(
 	return director_get(local_player_index)->inhibited_input;
 }
 
+boolean director_port_shoulder_camera(
+	short local_player_index)
+{
+	return local_player_index >= 0 && local_player_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS &&
+		director_get(local_player_index)->camera_proc == (director_camera_update_proc)shoulder_camera_update;
+}
+
 director_perspective director_get_perspective(
 	short local_player_index)
 {

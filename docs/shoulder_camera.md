@@ -25,6 +25,12 @@ It is implemented in `port/linux/game/shoulder_camera.c`.
   screen meets, as it already does for a vehicle's third-person gunner.
   The weapon sits a hand's breadth off that ray, so the turn allowed from
   the weapon's own line is widened to 25°.
+- **Sounds.** The first-person weapon is not drawn, but its animations
+  still run, and their sounds play (a reload, a pump) as in first person,
+  from the weapon in the body's hand (`first_person_weapons.c`).
+- **The flashlight.** The flashlight shines from just in front of the eye
+  along the aim, as from the first-person weapon. The body's own marker
+  points at the ground at its feet (`first_person_weapon_center_flashlight`).
 - **The view.** The view turns about the eye as in first person. With
   `display.direct_camera`, the camera swings round the eye the frame the
   view turns.

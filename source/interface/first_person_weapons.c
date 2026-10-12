@@ -715,6 +715,32 @@ void first_person_weapon_center_flashlight(
 				*up= marker.matrix.up;
 			}
 		}
+		/* port: over the shoulder, from just in front of the eye where the
+		crosshair points (the body's own marker, the head's, lights the
+		ground at its feet; from behind the eye, the light would be on the
+		body's back) */
+		else if (director_port_shoulder_camera(local_player_index))
+		{
+			struct unit_datum *unit= unit_get(unit_index);
+			real_point3d eye;
+			real_vector3d aim= unit->unit.aiming_vector;
+			real_vector3d right;
+
+			if (normalize3d(&aim)>0.f)
+			{
+				unit_get_camera_position(unit_index, &eye);
+				position->x= eye.x + aim.i*0.25f;
+				position->y= eye.y + aim.j*0.25f;
+				position->z= eye.z + aim.k*0.25f;
+				*forward= aim;
+				cross_product3d(&aim, global_up3d, &right);
+				if (normalize3d(&right)>0.f)
+				{
+					cross_product3d(&right, &aim, up);
+					normalize3d(up);
+				}
+			}
+		}
 	}
 
 	return;
@@ -1876,8 +1902,11 @@ static void first_person_weapon_update(
 			first_person_weapon_next_state(local_player_index);
 		}
 
+		/* port: over the shoulder too (the weapon is in the hand, in view:
+		its reload heard as in first person) */
 		if (sound_definition_index!=NONE &&
-			director_get_perspective(local_player_index)==_director_perspective_first_person)
+			(director_get_perspective(local_player_index)==_director_perspective_first_person ||
+				director_port_shoulder_camera(local_player_index)))
 		{
 			first_person_weapon->current_sound_index= object_impulse_sound_new(
 				first_person_weapon->weapon_index,
