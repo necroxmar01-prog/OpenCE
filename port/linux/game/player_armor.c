@@ -24,7 +24,7 @@ of "key = value", '#' or ';' starting a comment:
     permutation = helmet odst
 
 - name: as the list shows it (UTF-8; the file's name without .txt if none);
-- description: shown beside the list ('\n' a line break);
+- description: shown beside the list ('\\n' a line break);
 - biped: the biped tag to spawn as; none for the map's Spartan. An armor
   whose biped the loaded map has not is listed as not in this map, and the
   map's Spartan spawns instead;
@@ -200,7 +200,8 @@ static void armor_text_from_utf8(char const *source, wchar_t *text, short length
 
 		if (byte[0] == '\\' && byte[1] == 'n')
 		{
-			character = '\n';
+			/* (the menus' line break, as their strings': draw_string.c) */
+			character = '\r';
 			byte += 2;
 		}
 		else if (byte[0] < 0x80)
@@ -1018,10 +1019,10 @@ long player_armor_player_unit_definition(
 	if (biped_index == NONE)
 	{
 		error(_error_silent, "armor: co-op player %ld's %s is not in this game; the level's Spartan spawns",
-			player_index, dress.biped);
+			DATUM_INDEX_TO_ABSOLUTE_INDEX(player_index), dress.biped);
 		return default_definition_index;
 	}
-	error(_error_silent, "armor: co-op player %ld spawns as %s", player_index, dress.biped);
+	error(_error_silent, "armor: co-op player %ld spawns as %s", DATUM_INDEX_TO_ABSOLUTE_INDEX(player_index), dress.biped);
 	return biped_index;
 }
 

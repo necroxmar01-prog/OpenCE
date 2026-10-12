@@ -1354,10 +1354,10 @@ boolean map_share_holds_players(
 	once. Asking: whether the game is in progress is not known yet) */
 	if (!map_share_host() && game && !game->map.name[0])
 		return TRUE;
-	/* (failed: the game is being left) */
 	/* (co-op's addons not all here: network_addons.c) */
 	if (network_addons_pending())
 		return TRUE;
+	/* (failed: the game is being left) */
 	return download->state == _download_asking || download->state == _download_failed ||
 		(download->state == _download_transferring && download->in_progress);
 }
@@ -2595,8 +2595,9 @@ static void download_update(
 
 	if (download->state != _download_asking && download->state != _download_transferring)
 		return;
-	/* (the game left, or its map changed) */
-	if (!game || csstrcmp(game->map.name, download->level_name))
+	/* (the game left, or its map changed: an addon's is the game's whatever
+	its map, network_addons.c) */
+	if (!game || (!network_addons_level_name(download->level_name) && csstrcmp(game->map.name, download->level_name)))
 	{
 		error(_error_silent, "map sharing: the download of %s stopped: the game is on another map now",
 			download->level_name);
@@ -3144,7 +3145,8 @@ void map_share_render(
 	base_length = map_share_name_base_length(name);
 	if (download->state == _download_asking)
 	{
-		snprintf(text, sizeof(text), "Asking the host for the map %.*s...", (int)base_length, name);
+		snprintf(text, sizeof(text), network_addons_level_name(download->level_name) ?
+			"Asking the host for its mod %.*s..." : "Asking the host for the map %.*s...", (int)base_length, name);
 	}
 	else
 	{
@@ -3160,9 +3162,18 @@ void map_share_render(
 			sources += connection->used && connection->state == _connection_open && connection->hello_heard;
 		}
 		percent = download->total_bytes ? (long)(download->done_bytes / (download->total_bytes / 100 + 1)) : 0;
-		snprintf(text, sizeof(text), "Downloading the map %.*s: %ld%% of %lu MB from %d player%s, %lu KB/s",
-			(int)base_length, name, MIN(percent, 100), (download->total_bytes + 0x80000) >> 20, (int)sources,
-			sources == 1 ? "" : "s", rate >> 10);
+		/* (co-op's addons: the host's mods, network_addons.c) */
+		if (network_addons_level_name(download->level_name))
+		{
+			snprintf(text, sizeof(text), "Downloading the host's mod %.*s: %ld%% of %lu MB",
+				(int)base_length, name, MIN(percent, 100), (download->total_bytes + 0x80000) >> 20);
+		}
+		else
+		{
+			snprintf(text, sizeof(text), "Downloading the map %.*s: %ld%% of %lu MB from %d player%s, %lu KB/s",
+				(int)base_length, name, MIN(percent, 100), (download->total_bytes + 0x80000) >> 20, (int)sources,
+				sources == 1 ? "" : "s", rate >> 10);
+		}
 	}
 	/* (at the top of the screen, above the menus' safe area, where the
 	lobby's title is) */

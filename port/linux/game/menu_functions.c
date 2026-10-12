@@ -1679,11 +1679,11 @@ static void armor_list_update(struct widget_instance *list)
 		armor_list.armor = armor;
 	rows_update(list, rows, armor_row_text);
 	{
-		static wchar_t const missing[] = L"\n\nThis level has not got this\narmor: the level's Spartan is\nworn instead.";
+		static wchar_t const missing[] = L"\r\n\r\nThis level has not got this\r\narmor: the level's Spartan is\r\nworn instead.";
 		wchar_t text[ARMOR_DESCRIPTION_LENGTH];
 		short length;
 
-		static wchar_t const pieces[] = L"\n\nPIECES: choose its helmet,\nchest and shoulders one by one.";
+		static wchar_t const pieces[] = L"\r\n\r\nPIECES: choose its helmet,\r\nchest and shoulders.";
 
 		player_armor_description(armor_list.armor, text, ARMOR_DESCRIPTION_LENGTH);
 		length = (short)ustrlen(text);
@@ -1777,7 +1777,7 @@ static void armor_pieces_update(struct widget_instance *list)
 	rows_update(list, count, armor_piece_row_text);
 	player_armor_name(armor_pieces.armor, text, ARMOR_DESCRIPTION_LENGTH);
 	length = (short)ustrlen(text);
-	ustrncpy(text + length, L"\n\nChoose a piece to change it.\nWorn from the next mission on.",
+	ustrncpy(text + length, L"\r\n\r\nChoose a piece to change it.\r\nWorn from the next mission.",
 		ARMOR_DESCRIPTION_LENGTH - length - 1);
 	text[ARMOR_DESCRIPTION_LENGTH - 1] = 0;
 	text_set_length(named(description, "pieces_desc", 0), text, ARMOR_DESCRIPTION_LENGTH);
@@ -1840,7 +1840,7 @@ static void armor_options_update(struct widget_instance *list)
 	rows_update(list, rows, armor_option_row_text);
 	player_armor_piece_name(armor_pieces.armor, armor_pieces.piece, text, ARMOR_DESCRIPTION_LENGTH);
 	length = (short)ustrlen(text);
-	ustrncpy(text + length, L"\n\n", ARMOR_DESCRIPTION_LENGTH - length - 1);
+	ustrncpy(text + length, L"\r\n\r\n", ARMOR_DESCRIPTION_LENGTH - length - 1);
 	length = (short)ustrlen(text);
 	player_armor_option_name(armor_pieces.armor, armor_pieces.piece, armor_pieces.option, text + length,
 		(short)(ARMOR_DESCRIPTION_LENGTH - length));
