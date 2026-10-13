@@ -172,6 +172,22 @@ game must graft the same addons in the same order. They are the host's
 A host of a build without this tells of none: after 15 seconds its clients
 load the level as it is.
 
+## Android
+
+The Android app (application id `com.halo.decomp.mods`, "Halo (mods)": an
+app of its own beside the upstream one, with its own data folder, since a
+build with the mods' network version cannot play with it anyway) cannot
+build addons: Invader runs on the desktop. opence-mods there writes the
+active mods, built, to a zip (`opence-mods.py export-android`, or Options >
+Exportar para Android): `opence-mods-android.txt` (which says it is one),
+`armors/*.txt`, the `addons/*.map` they and the weapons use, and
+`weapons/*.txt`. Opened with the app (from a file manager or a chat app:
+`ModImportActivity`), it is put in the data folder
+(`/sdcard/Android/data/com.halo.decomp.mods/files`), in place of the mods an
+earlier zip brought. The zip is untrusted: only those three folders, plain
+file names with the right extension, and at most 512 files and 1 GB are
+taken.
+
 ## Limits
 
 - One armor at a time, the one chosen, and up to eight weapon mods.

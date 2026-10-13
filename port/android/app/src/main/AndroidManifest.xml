@@ -68,6 +68,33 @@
             </intent-filter>
         </activity>
 
+        <!-- opence-mods: the mods a Steam Deck exported for Android
+             (opence-mods-android.zip), opened with the app from a file
+             manager or a chat app (ModImportActivity) -->
+        <activity
+            android:name=".ModImportActivity"
+            android:exported="true"
+            android:label="Instalar mods en Halo"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+        </activity>
+
         <!-- in a process of its own, with a fresh Java heap (HaloApplication) -->
         <activity
             android:name=".HaloActivity"
@@ -87,7 +114,7 @@
         <!-- the downloaded new version, for the package installer (Updater) -->
         <provider
             android:name=".UpdateProvider"
-            android:authorities="com.halo.decomp.update"
+            android:authorities="${applicationId}.update"
             android:exported="false"
             android:grantUriPermissions="true" />
 
