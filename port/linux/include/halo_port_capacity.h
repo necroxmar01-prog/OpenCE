@@ -44,10 +44,14 @@ is drawn as the default one ("YOU GOT STABBED" in debug.txt; Elite_Alpha_Siege
 did at 22 MB), and a frame of bigass_v3 draws more than 64 MB (DamnationCE's
 measurement). The desktop builds' cache is 256 MB, half their 512 MB memory
 window (port/linux/src/platform.h), whose pages are backed as they are used.
-Android's window is 128 MB, as the web build's, and its cache the Xbox's. */
+Android's window is 128 MB, as the web build's, and its cache 36 MB: a
+campaign level with addons' armors and weapons (opence-mods), their textures
+made for Halo PC, drew more than the Xbox's 22 MB in a frame (two players in
+Halo 3 armors on c20: "YOU GOT STABBED", and the level drawn with others'
+textures); the level, its addons and the caches then take about 110 MB. */
 
 #if defined(HALO_ARM64_GUEST) || defined(HALO_WEB)
-#define HALO_PORT_TEXTURE_CACHE_PAGE_COUNT 0x580 /* (0x580) */
+#define HALO_PORT_TEXTURE_CACHE_PAGE_COUNT 0x900 /* (0x580) */
 #else
 #define HALO_PORT_TEXTURE_CACHE_PAGE_COUNT 0x4000 /* (0x580) */
 #endif

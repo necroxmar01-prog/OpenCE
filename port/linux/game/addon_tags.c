@@ -560,6 +560,11 @@ void addon_tags_loaded(
 		if (mod && !addon_tags_weapon_mods_wanted(mod, table, count))
 		{
 			error(_error_silent, "weapon %s: this level has not the weapon it replaces", mod->id);
+			/* (its tags given back: Android's memory window has no room to spare) */
+			XPhysicalFree(addon->memory);
+			addon->memory = NULL;
+			addon_tags_free(addon->file);
+			addon->file = NULL;
 			continue;
 		}
 		grafted = malloc((size_t)(count + header->tag_count) * sizeof(*grafted));
