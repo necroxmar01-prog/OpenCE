@@ -1705,15 +1705,19 @@ static void armor_list_update(struct widget_instance *list)
 	profile_name_show(description);
 }
 
-/* "port armor select": the armor chosen, worn from the next mission on
-(not when A on its row opened its pieces: "port armor row pieces") */
-static boolean armor_choose(void)
+/* "port armor select": the armor of the row chosen, worn from the next
+mission on (not when A on its row opened its pieces: "port armor row
+pieces"). OK keeps the armor worn: going to it with a controller passes
+other rows, and the last of them is not a choice. */
+static boolean armor_choose(struct widget_instance *list)
 {
 	if (armor_list.pieces_opened)
 	{
 		armor_list.pieces_opened = FALSE;
 		return FALSE;
 	}
+	if (focused_row(list) == NONE)
+		return TRUE;
 	player_armor_select(armor_list.armor);
 	return TRUE;
 }
@@ -1736,15 +1740,16 @@ static struct
 	short option;
 } armor_pieces;
 
-/* "port armor pieces open" (PIECES): the armor of the list's last row, worn
-now, if it has pieces, else the armor worn if it has (going down to the
-button with a controller passes other rows), else nothing opens */
+/* "port armor pieces open" (PIECES): the armor worn, if it has pieces, else
+the armor of the list's last row, worn now, if it has (going to the button
+with a controller passes other rows: the one worn comes first), else
+nothing opens */
 static boolean armor_pieces_open(void)
 {
-	short armor = armor_list.armor;
+	short armor = player_armor_selected();
 
 	if (player_armor_piece_count(armor) <= 0)
-		armor = player_armor_selected();
+		armor = armor_list.armor;
 	if (player_armor_piece_count(armor) <= 0)
 		return FALSE;
 	armor_pieces.armor = armor;
@@ -5961,7 +5966,7 @@ boolean pc_menu_event_function_invoke(
 		}
 		else if (!strcmp(name, "port armor select"))
 		{
-			return armor_choose();
+			return armor_choose(widget);
 		}
 		else if (!strcmp(name, "port armor pieces open"))
 		{
