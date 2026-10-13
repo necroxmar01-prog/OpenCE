@@ -1015,7 +1015,10 @@ long player_armor_player_unit_definition(
 	if (!armor_coop_dress(player_index, local_player_index, &dress))
 		return player_armor_unit_definition(local_player_index, default_definition_index);
 	if (!dress.biped[0])
+	{
+		error(_error_silent, "armor: co-op player %ld wears the level's Spartan", DATUM_INDEX_TO_ABSOLUTE_INDEX(player_index));
 		return default_definition_index;
+	}
 	biped_index = tag_loaded(BIPED_DEFINITION_TAG, dress.biped);
 	if (biped_index == NONE)
 	{
@@ -1210,10 +1213,115 @@ static boolean armor_dress_loaded_player(
 	return TRUE;
 }
 
+/* the level's player unit (the Spartan of its globals), else NONE */
+static long armor_level_player_unit(
+	void)
+{
+	struct game_globals *globals = scenario_get_game_globals();
+
+	if (!globals || globals->player_information.count <= 0)
+		return NONE;
+	return TAG_BLOCK_GET_ELEMENT(&globals->player_information, 0, struct game_globals_player_information)->player_unit.index;
+}
+
+/* network co-op's host: the player's unit given its armor's place, as a
+loaded game's is (armor_dress_loaded_player), when it is not of the armor's
+biped: made some way other than a spawn (a cutscene's revert, a unit the
+scripts gave), it would be the level's Spartan on every machine. FALSE if not
+now (in a vehicle, dead, in a cinematic: tried again). */
+static boolean armor_coop_redress_player(
+	long player_index)
+{
+	struct player_datum *player = player_get(player_index);
+	struct player_armor_dress dress;
+	struct unit_datum *old_unit;
+	struct unit_datum *new_unit;
+	struct object_placement_data placement;
+	long old_unit_index = player->unit_index;
+	long new_unit_index;
+	long biped_index;
+
+	if (old_unit_index == NONE || !armor_coop_dress(player_index, player->local_player_index, &dress) ||
+		!dress.biped[0])
+	{
+		return TRUE;
+	}
+	biped_index = tag_loaded(BIPED_DEFINITION_TAG, dress.biped);
+	old_unit = unit_get(old_unit_index);
+	if (biped_index == NONE || old_unit->definition_index == biped_index ||
+		old_unit->definition_index != armor_level_player_unit())
+	{
+		return TRUE;
+	}
+	if (old_unit->object.parent_object_index != NONE || TEST_FLAG(old_unit->object.damage_flags, _object_dead_bit) ||
+		cinematic_in_progress() || old_unit->unit.grenade_throw_state != 0)
+	{
+		return FALSE;
+	}
+
+	object_placement_data_new(&placement, biped_index, NONE);
+	placement.position = old_unit->object.position;
+	placement.forward = old_unit->object.forward;
+	placement.up = old_unit->object.up;
+	placement.translational_velocity = old_unit->object.translational_velocity;
+	csmemcpy(placement.change_colors, old_unit->object.base_change_colors, sizeof(placement.change_colors));
+	new_unit_index = object_new(&placement);
+	if (new_unit_index == NONE)
+	{
+		error(_error_silent, "armor: no room for co-op player %ld's unit; the level's Spartan stays",
+			DATUM_INDEX_TO_ABSOLUTE_INDEX(player_index));
+		return TRUE;
+	}
+	/* (object_new may move the old one in the objects' memory) */
+	old_unit = unit_get(old_unit_index);
+	new_unit = unit_get(new_unit_index);
+	new_unit->object.owner_player_index = old_unit->object.owner_player_index;
+	new_unit->object.owner_team_index = old_unit->object.owner_team_index;
+	new_unit->object.body_vitality = old_unit->object.body_vitality;
+	new_unit->object.shield_vitality = old_unit->object.shield_vitality;
+	new_unit->unit.desired_facing_vector = old_unit->unit.desired_facing_vector;
+	new_unit->unit.desired_aiming_vector = old_unit->unit.desired_aiming_vector;
+	new_unit->unit.aiming_vector = old_unit->unit.aiming_vector;
+	new_unit->unit.desired_looking_vector = old_unit->unit.desired_looking_vector;
+	new_unit->unit.looking_vector = old_unit->unit.looking_vector;
+	new_unit->unit.integrated_light_battery = old_unit->unit.integrated_light_battery;
+	unit_port_move_inventory(old_unit_index, new_unit_index);
+	armor_dress_apply(&dress, new_unit_index, NULL);
+	error(_error_silent, "armor: co-op player %ld (%s) is now %s", DATUM_INDEX_TO_ABSOLUTE_INDEX(player_index),
+		tag_get_name(old_unit->definition_index), dress.biped);
+
+	/* (as player_spawn gives a unit: players_set_local_player_unit is a
+	game on this machine alone's) */
+	old_unit->unit.player_index = NONE;
+	unit_set_actively_controlled(old_unit_index, FALSE);
+	new_unit->unit.player_index = player_index;
+	unit_set_actively_controlled(new_unit_index, TRUE);
+	player->unit_index = new_unit_index;
+	if (player->local_player_index != NONE)
+		player_control_new_unit(player->local_player_index, new_unit_index);
+	object_delete(old_unit_index);
+	return TRUE;
+}
+
+/* network co-op's host, twice a second: every player in its armor */
+static void armor_coop_redress(
+	void)
+{
+	struct data_iterator iterator;
+
+	if (!network_coop_active() || network_game_distributed_client() || game_time_get() % 15 != 0)
+		return;
+	data_iterator_new(&iterator, player_data);
+	while (data_iterator_next(&iterator))
+		armor_coop_redress_player(iterator.datum_index);
+}
+
 void player_armor_update(
 	void)
 {
 	short local_player_index;
+
+	armor_coop_redress();
 
 	for (local_player_index = 0; local_player_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS; local_player_index++)
 	{
