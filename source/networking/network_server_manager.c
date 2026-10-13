@@ -475,6 +475,7 @@ symbols in this file:
 #include "interface/player_ui.h"
 #include "tag_files/tag_files.h"
 #include "map_share.h" /* port: port/linux/game/map_share.c */
+#include "network_addons.h" /* port: port/linux/game/network_addons.c */
 
 /* port: internet play's Discord presence (port/linux/src/p2p.c), and the
 server browser's listing of a public game (p2p_lobby.c) */
@@ -4570,6 +4571,10 @@ static boolean network_game_server_have_all_machines_have_precached(
 				server->client_machines[i].flags,
 				_network_client_machine_precached_bit);
 
+			/* port: and co-op's addons, the host's, whole on that machine
+			(port/linux/game/network_addons.c) */
+			if (client_has_precached && !network_addons_machine_ready(machine->machine_index))
+				client_has_precached = FALSE;
 			if (!client_has_precached)
 			{
 				all_machines_have_precached = FALSE;

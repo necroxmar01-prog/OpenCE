@@ -49,7 +49,15 @@ crosshair stays clear of it.
   first person while zoomed and comes back over the shoulder in a third of
   a second.
 - **Vehicles.** A seat keeps its own camera, first or third person.
-- **Multiplayer and network co-op.** These keep first person. Another
-  player could not see round corners, and a host does not know a remote
-  player's camera, which the projectiles' aim depends on.
+- **Multiplayer.** This keeps first person: another player could not see
+  round corners.
+
+## Network co-op
+
+Each player has the camera of their own machine's setting. A player's shots
+over the shoulder go where that player's camera points, which every machine
+works out from the unit (`shoulder_camera_deterministic`: the eye, the aim
+and the walls) once it knows which camera that player has: a client tells
+the host its own with its armor, and the host tells every client every
+player's (`network_addons.c`, `_distributed_message_player_cameras`).
 - **Cinematics and death.** These keep their cameras.

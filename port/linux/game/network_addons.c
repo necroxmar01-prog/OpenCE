@@ -9,7 +9,9 @@ have the same tags: the level's, and the same addons grafted onto it in the
 same order (addon_tags.c). In a co-op game they are the host's:
 
 - The host's addons: the armor it chose (if an addon brings it), every armor
-  of pieces (an armor kit: any player may wear one), and its weapon mods,
+  of pieces (an armor kit: any player may wear one), the armors of its own
+  that the clients' players wear (of the same biped: one a client chose
+  from mods the host has too), and its weapon mods,
   hashed as map sharing hashes maps (map_share_files.c). While the game is in
   its lobby the set follows what the host has; once its level loads, it is
   the set that level got.
@@ -27,8 +29,15 @@ same order (addon_tags.c). In a co-op game they are the host's:
   (_distributed_message_armor_dress). The host spawns that machine's
   player in it (player_spawn, which only the host runs in co-op), and the
   unit goes to every machine as the host made it, permutations and all
-  (network_objects.c). An armor whose biped the game has not (an addon the
-  host does not offer) is the level's Spartan.
+  (network_objects.c). An armor whose biped the game has not (one the host
+  has not, or chosen after the level loaded) is the level's Spartan.
+- The over-the-shoulder camera (shoulder_camera.c): the shots of a player
+  over the shoulder go where that player's camera points, which every
+  machine works out from the unit (shoulder_camera_deterministic) if it
+  knows which camera the player has. A client tells the host its own with
+  its dress; the host tells every client every player's
+  (_distributed_message_player_cameras, reliably, when it changes or a
+  machine joins).
 */
 
 /* ---------- headers */
@@ -36,6 +45,7 @@ same order (addon_tags.c). In a co-op game they are the host's:
 #include "cseries.h"
 #include "cseries/errors.h"
 #include "game/game.h"
+#include "memory/data.h"
 #include "game/players.h"
 #include "scenario/scenario.h"
 #include "scenario/scenario_definitions.h"
@@ -47,6 +57,7 @@ same order (addon_tags.c). In a co-op game they are the host's:
 #include "map_share.h"
 #include "network_distributed.h"
 #include "network_addons.h"
+#include "shoulder_camera.h"
 
 #include <xtl.h>
 #include <stdio.h>
@@ -74,9 +85,12 @@ enum
 	DRESS_INTERVAL = 30000,
 	/* the host waits for its addons' hashes this long as its level loads */
 	HASH_WAIT = 10000,
-	/* a client of a host that tells it of no addons (one of a build without
-	them) takes it that there are none after this long */
-	MANIFEST_TIMEOUT = 15000,
+	/* a client whose host has not told it of its addons yet loads no level:
+	every host of this network version tells of them (an empty set too), so
+	only one that never answers is given up on, after this long */
+	MANIFEST_TIMEOUT = 120000,
+	/* the players' cameras the host tells of (by their absolute index) */
+	NETWORK_ADDONS_CAMERA_PLAYERS = HALO_PORT_MAXIMUM_NETWORK_PLAYERS,
 	ADDON_TAGS_GROUP_BIPED = 'bipd',
 };
 
@@ -115,12 +129,33 @@ struct distributed_addon
 struct distributed_armor_dress
 {
 	byte local_player_index;
-	byte pad[3];
+	/* the machine's camera (shoulder_camera_local_mode) */
+	byte camera;
+	byte pad[2];
+	/* the signature of the host's set the machine has whole, every addon
+	here (0: not yet): the host starts no game before (a level loaded
+	without one of them would not have the host's tags) */
+	unsigned long addons_ready;
 	struct player_armor_dress dress;
+};
+
+/* every player's camera, as the host knows them (by the players' absolute
+indices; 0: first person) */
+struct distributed_player_cameras
+{
+	word count;
+	word pad;
+	struct
+	{
+		word player;
+		byte camera;
+		byte pad;
+	} players[NETWORK_ADDONS_CAMERA_PLAYERS];
 };
 
 typedef char distributed_addon_size_assert[sizeof(struct distributed_addon) < 4000 ? 1 : -1];
 typedef char distributed_armor_dress_size_assert[sizeof(struct distributed_armor_dress) < 4000 ? 1 : -1];
+typedef char distributed_player_cameras_size_assert[sizeof(struct distributed_player_cameras) < 4000 ? 1 : -1];
 
 /* an addon of a set: the message's, and this machine's file and catalog
 file (map_share_files.c) */
@@ -159,6 +194,13 @@ static struct
 	/* the host: the armors the clients chose, by machine */
 	boolean dress_valid[NETWORK_ADDONS_MACHINES];
 	struct player_armor_dress dresses[NETWORK_ADDONS_MACHINES];
+	byte machine_cameras[NETWORK_ADDONS_MACHINES];
+	unsigned long machine_ready[NETWORK_ADDONS_MACHINES];
+	/* every player's camera: the host's as last told of to each machine,
+	and the table (a client's from the host) */
+	unsigned long cameras_sent_signature[NETWORK_ADDONS_MACHINES];
+	unsigned long cameras_sent_address[NETWORK_ADDONS_MACHINES];
+	byte player_cameras[NETWORK_ADDONS_CAMERA_PLAYERS];
 
 	/* a client: the set the host told of (whole once every addon of it came),
 	the one coming, and since when this game has waited for it */
@@ -171,6 +213,8 @@ static struct
 	char game_level[64];
 	/* a client: its armor, as last sent */
 	struct player_armor_dress dress_sent;
+	byte camera_sent;
+	unsigned long ready_sent;
 	unsigned long dress_sent_at;
 	boolean dress_ever_sent;
 } network_addons;
@@ -262,7 +306,28 @@ static void host_build(
 	short armor_count = player_armor_network_addons(addons, bipeds, 4);
 	short mod_count = weapon_mods_read_all(mods, WEAPON_MODS_MAXIMUM);
 	short index;
+	long machine_index;
 	boolean unsettled = FALSE;
+
+	/* (and the host's armors the clients' players wear) */
+	for (machine_index = 0; machine_index < NETWORK_ADDONS_MACHINES && armor_count < 8; machine_index++)
+	{
+		struct player_armor_dress const *dress = &network_addons.dresses[machine_index];
+		boolean listed = FALSE;
+
+		if (!network_addons.dress_valid[machine_index] || !dress->biped[0])
+			continue;
+		for (index = 0; index < armor_count; index++)
+		{
+			if (!_stricmp(bipeds[index], dress->biped))
+				listed = TRUE;
+		}
+		if (!listed && player_armor_addon_of_biped(dress->biped, addons[armor_count], sizeof(addons[0])))
+		{
+			addons_copy(bipeds[armor_count], dress->biped, sizeof(bipeds[0]));
+			armor_count++;
+		}
+	}
 
 	csmemset(&set, 0, sizeof(set));
 	for (index = 0; index < armor_count + mod_count && set.count < NETWORK_ADDONS_MAXIMUM; index++)
@@ -369,6 +434,92 @@ static void host_send(
 	}
 }
 
+/* every player's camera as the host knows it: its own players' its own,
+the others' their machines' */
+static void host_cameras(
+	struct distributed_player_cameras *cameras)
+{
+	struct data_iterator iterator;
+	short local_machine = network_game_client_get_local_machine_index();
+	byte local = (byte)shoulder_camera_local_mode();
+	struct player_datum *player;
+
+	csmemset(cameras, 0, sizeof(*cameras));
+	csmemset(network_addons.player_cameras, 0, sizeof(network_addons.player_cameras));
+	data_iterator_new(&iterator, player_data);
+	while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
+	{
+		long absolute = DATUM_INDEX_TO_ABSOLUTE_INDEX(iterator.datum_index);
+		long machine_index = player->network_player_data.machine_index;
+		byte camera = 0;
+
+		if (absolute < 0 || absolute >= NETWORK_ADDONS_CAMERA_PLAYERS)
+			continue;
+		if (player->local_player_index != NONE || machine_index == local_machine)
+			camera = local;
+		else if (machine_index >= 0 && machine_index < NETWORK_ADDONS_MACHINES &&
+			network_addons.dress_valid[machine_index])
+		{
+			camera = network_addons.machine_cameras[machine_index];
+		}
+		network_addons.player_cameras[absolute] = camera;
+		cameras->players[cameras->count].player = (word)absolute;
+		cameras->players[cameras->count].camera = camera;
+		cameras->count++;
+	}
+}
+
+static unsigned long cameras_signature(
+	struct distributed_player_cameras const *cameras)
+{
+	unsigned long signature = 0x0CA3E7A5;
+	word index;
+
+	for (index = 0; index < cameras->count; index++)
+	{
+		signature = (signature ^ cameras->players[index].player) * 16777619UL;
+		signature = (signature ^ cameras->players[index].camera) * 16777619UL;
+	}
+	return signature ? signature : 1;
+}
+
+/* every player's camera told of to each client, when it changes or the
+machine joins */
+static void host_send_cameras(
+	void)
+{
+	struct
+	{
+		struct distributed_message_header header;
+		struct distributed_player_cameras cameras;
+	} message;
+	short local_machine = network_game_client_get_local_machine_index();
+	unsigned long signature;
+	long machine_index;
+
+	host_cameras(&message.cameras);
+	signature = cameras_signature(&message.cameras);
+	for (machine_index = 0; machine_index < NETWORK_ADDONS_MACHINES; machine_index++)
+	{
+		unsigned long address = network_game_server_machine_address(machine_index);
+
+		if (!address || machine_index == local_machine)
+		{
+			network_addons.cameras_sent_address[machine_index] = 0;
+			continue;
+		}
+		if (network_addons.cameras_sent_address[machine_index] == address &&
+			network_addons.cameras_sent_signature[machine_index] == signature)
+		{
+			continue;
+		}
+		addons_fill_header(&message.header, _distributed_message_player_cameras, (word)sizeof(message));
+		network_distributed_server_send_to_machine_reliably(machine_index, &message, (word)sizeof(message));
+		network_addons.cameras_sent_address[machine_index] = address;
+		network_addons.cameras_sent_signature[machine_index] = signature;
+	}
+}
+
 static void host_update(
 	void)
 {
@@ -383,6 +534,8 @@ static void host_update(
 		network_addons.loaded = FALSE;
 		return;
 	}
+	if (game_in_progress())
+		host_send_cameras();
 	/* (the set the level got, while a level is loaded: else the lobby's) */
 	if (!(game_map_loaded() && global_scenario_index != NONE && global_scenario_get()->type == _scenario_type_solo))
 		network_addons.loaded = FALSE;
@@ -531,6 +684,22 @@ static void client_handle_addon(
 	}
 }
 
+/* the signature of the host's set when this machine has it whole, else 0 */
+static unsigned long client_ready_signature(
+	void)
+{
+	short index;
+
+	if (!network_addons.client_complete)
+		return 0;
+	for (index = 0; index < network_addons.client_set.count; index++)
+	{
+		if (!network_addons.client_set.addons[index].present)
+			return 0;
+	}
+	return network_addons.client_set.signature;
+}
+
 /* the client's armor sent to the host, when it changes and now and then */
 static void client_send_dress(
 	void)
@@ -544,14 +713,19 @@ static void client_send_dress(
 
 	csmemset(&message, 0, sizeof(message));
 	player_armor_local_dress(&message.dress.dress);
+	message.dress.camera = (byte)shoulder_camera_local_mode();
+	message.dress.addons_ready = client_ready_signature();
 	if (network_addons.dress_ever_sent && now - network_addons.dress_sent_at < DRESS_INTERVAL &&
-		!csmemcmp(&message.dress.dress, &network_addons.dress_sent, sizeof(message.dress.dress)))
+		!csmemcmp(&message.dress.dress, &network_addons.dress_sent, sizeof(message.dress.dress)) &&
+		message.dress.camera == network_addons.camera_sent && message.dress.addons_ready == network_addons.ready_sent)
 	{
 		return;
 	}
 	addons_fill_header(&message.header, _distributed_message_armor_dress, (word)sizeof(message));
 	network_distributed_client_send_reliably(&message, (word)sizeof(message));
 	network_addons.dress_sent = message.dress.dress;
+	network_addons.camera_sent = message.dress.camera;
+	network_addons.ready_sent = message.dress.addons_ready;
 	network_addons.dress_sent_at = now;
 	network_addons.dress_ever_sent = TRUE;
 }
@@ -579,7 +753,8 @@ static void client_update(
 		system_milliseconds() - network_addons.waiting_since >= MANIFEST_TIMEOUT)
 	{
 		network_addons.timed_out = TRUE;
-		error(_error_silent, "network addons: the host told of none (a host without them): the level as it is");
+		error(_error_silent, "network addons: the host has not told of its addons in %d seconds: the level as it is",
+			(int)(MANIFEST_TIMEOUT / 1000));
 	}
 	client_send_dress();
 	if (!network_addons.client_complete || !map_share_download_idle())
@@ -694,6 +869,44 @@ boolean network_addons_player_dress(
 	return TRUE;
 }
 
+boolean network_addons_machine_ready(
+	long machine_index)
+{
+	struct network_game *game = addons_network_game();
+	struct network_addon_set const *set;
+
+	if (!addons_host() || !game || !addons_campaign_level(game->map.name) ||
+		machine_index == network_game_client_get_local_machine_index())
+	{
+		return TRUE;
+	}
+	if (machine_index < 0 || machine_index >= NETWORK_ADDONS_MACHINES)
+		return TRUE;
+	set = network_addons.loaded ? &network_addons.loaded_set : &network_addons.host_set;
+	/* (the host's set not told of yet: nobody can have it) */
+	if (!set->settled)
+		return FALSE;
+	return network_addons.dress_valid[machine_index] && network_addons.machine_ready[machine_index] == set->signature;
+}
+
+short network_addons_player_camera(
+	long player_index)
+{
+	long absolute = player_index != NONE ? DATUM_INDEX_TO_ABSOLUTE_INDEX(player_index) : NONE;
+
+	if (absolute < 0 || absolute >= NETWORK_ADDONS_CAMERA_PLAYERS)
+		return 0;
+	if (addons_host())
+	{
+		struct player_datum *player = player_get(player_index);
+		long machine_index = player->network_player_data.machine_index;
+
+		return machine_index >= 0 && machine_index < NETWORK_ADDONS_MACHINES &&
+			network_addons.dress_valid[machine_index] ? network_addons.machine_cameras[machine_index] : 0;
+	}
+	return network_addons.player_cameras[absolute];
+}
+
 boolean network_addons_level_name(
 	char const *level_name)
 {
@@ -771,7 +984,8 @@ boolean network_addons_handles_message(
 	if (size < sizeof(header))
 		return FALSE;
 	csmemcpy(&header, message, sizeof(header));
-	return header.type == _distributed_message_addons || header.type == _distributed_message_armor_dress;
+	return header.type == _distributed_message_addons || header.type == _distributed_message_armor_dress ||
+		header.type == _distributed_message_player_cameras;
 }
 
 void network_addons_handle_message(
@@ -796,6 +1010,27 @@ void network_addons_handle_message(
 			return;
 		csmemcpy(&entry, entries, sizeof(entry));
 		client_handle_addon(&entry);
+	}
+	else if (header.type == _distributed_message_player_cameras)
+	{
+		struct distributed_player_cameras cameras;
+		word index;
+
+		/* (the host's, to a client) */
+		if (machine_index != NONE || addons_host() || length != (long)sizeof(cameras))
+			return;
+		csmemcpy(&cameras, entries, sizeof(cameras));
+		if (cameras.count > NETWORK_ADDONS_CAMERA_PLAYERS)
+			return;
+		csmemset(network_addons.player_cameras, 0, sizeof(network_addons.player_cameras));
+		for (index = 0; index < cameras.count; index++)
+		{
+			if (cameras.players[index].player < NETWORK_ADDONS_CAMERA_PLAYERS &&
+				cameras.players[index].camera <= 2)
+			{
+				network_addons.player_cameras[cameras.players[index].player] = cameras.players[index].camera;
+			}
+		}
 	}
 	else
 	{
@@ -829,6 +1064,10 @@ void network_addons_handle_message(
 				dress.dress.biped[0] ? dress.dress.biped : "the level's Spartan", (int)dress.dress.region_count);
 		}
 		network_addons.dresses[machine_index] = dress.dress;
+		network_addons.machine_cameras[machine_index] = dress.camera <= 2 ? dress.camera : 0;
+		if (network_addons.machine_ready[machine_index] != dress.addons_ready && dress.addons_ready)
+			error(_error_silent, "network addons: machine #%ld has the host's addons", machine_index);
+		network_addons.machine_ready[machine_index] = dress.addons_ready;
 		network_addons.dress_valid[machine_index] = TRUE;
 	}
 }
@@ -846,5 +1085,6 @@ void network_addons_update(
 			client_reset();
 		network_addons.loaded = FALSE;
 		network_addons.game_level[0] = 0;
+		csmemset(network_addons.player_cameras, 0, sizeof(network_addons.player_cameras));
 	}
 }

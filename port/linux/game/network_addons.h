@@ -59,6 +59,18 @@ boolean network_addons_player_dress(
 	long player_index,
 	struct player_armor_dress *dress);
 
+/* (the host, network_server_manager.c) whether a machine has the host's
+addons whole: no game starts before every machine has (one that loaded the
+level without one would not have the host's tags) */
+boolean network_addons_machine_ready(
+	long machine_index);
+
+/* (shoulder_camera.c) the camera of a player of another machine: 0 first
+person, 1 over the right shoulder, 2 over the left (as its machine told the
+host, and the host every machine) */
+short network_addons_player_camera(
+	long player_index);
+
 /* (map_share.c) a download's level name that is an addon's; its file there
 (the host's), else FALSE */
 boolean network_addons_level_name(

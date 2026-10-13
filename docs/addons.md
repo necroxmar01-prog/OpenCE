@@ -153,7 +153,9 @@ game must graft the same addons in the same order. They are the host's
 (`port/linux/game/network_addons.c`):
 
 - The host offers the addon of the armor it chose, those of its armors of
-  pieces (any player may wear one) and its weapon mods, each hashed as map
+  pieces (any player may wear one), those of its armors that the clients'
+  players wear (the same biped: an armor a client chose from mods the host
+  has too) and its weapon mods, each hashed as map
   sharing hashes maps. In the lobby the set follows what the host has; once
   the level loads it is fixed, and a machine that joins later is told of
   that one.
@@ -162,15 +164,20 @@ game must graft the same addons in the same order. They are the host's
   One it has not is downloaded from the host and the other players as a
   Custom Edition map is (`map_share.c`, level name `addons\<name>_<hash>`).
   Until it has them all its level is not precached, so the lobby waits for
-  it, and a game in progress is joined once they are here.
+  it, and a game in progress is joined once they are here. The client tells
+  the host when it has the set whole (with its armor), and the host starts
+  no game before every machine has: a level loaded without one of them
+  would not have the host's tags, and the players would not see each other.
 - Each client sends the armor it chose (`_distributed_message_armor_dress`:
   the biped and each region's permutation, pieces included). The host spawns
   that machine's player in it, and the unit reaches every machine as the host
   made it. A biped the game has not (an armor whose addon the host does not
   offer) spawns the level's Spartan; colours are co-op's own (each profile's).
 
-A host of a build without this tells of none: after 15 seconds its clients
-load the level as it is.
+A client whose host has not told it of its addons in two minutes loads the
+level as it is (every host of the mods' network version tells of them, an
+empty set too). The over-the-shoulder camera's part is in
+`docs/shoulder_camera.md`.
 
 ## Android
 

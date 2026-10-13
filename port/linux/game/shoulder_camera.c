@@ -15,9 +15,11 @@ meets (as it does for a vehicle's third-person gunner), with the camera
 director_camera_deterministic gives, which is this one's.
 
 A scope (a zoomed weapon) looks through the eye, in first person, and a
-vehicle's seat keeps its own camera. Multiplayer and network co-op keep
-first person: another player could not see round corners, and a host does
-not know a remote player's camera.
+vehicle's seat keeps its own camera. Multiplayer keeps first person (another
+player could not see round corners). In network co-op each player has the
+camera their machine's setting gives, and every machine knows every
+player's (network_addons.c tells them), so that a player's shots go where
+that player's camera points on every machine.
 
 Walls: the camera is pulled in front of a wall between it and the eye, and
 eases back out when the wall is gone.
@@ -35,6 +37,7 @@ eases back out when the wall is gone.
 #include "units/units.h"
 
 #include "network_coop.h"
+#include "network_addons.h"
 
 #include <string.h>
 
@@ -94,12 +97,34 @@ static short shoulder_camera_setting(
 	return setting;
 }
 
+short shoulder_camera_local_mode(
+	void)
+{
+	return shoulder_camera_setting();
+}
+
 static boolean shoulder_camera_allowed_here(
 	void)
 {
 	return shoulder_camera_setting() != _shoulder_camera_off &&
-		!game_engine_running() &&
-		!network_coop_active();
+		!game_engine_running();
+}
+
+/* the camera of the player a unit is: this machine's setting for its own
+players, the player's machine's in network co-op (network_addons.c) */
+static short shoulder_camera_unit_mode(
+	struct unit_datum const *unit)
+{
+	struct player_datum *player;
+
+	if (unit->unit.player_index == NONE)
+		return _shoulder_camera_off;
+	if (!network_coop_active())
+		return shoulder_camera_setting();
+	player = player_get(unit->unit.player_index);
+	if (player->local_player_index != NONE)
+		return shoulder_camera_setting();
+	return network_addons_player_camera(unit->unit.player_index);
 }
 
 /* on foot, alive, a biped */
@@ -130,10 +155,11 @@ boolean shoulder_camera_wanted_for_unit(
 {
 	struct unit_datum *unit;
 
-	if (!shoulder_camera_allowed_here() || !shoulder_camera_unit_on_foot(unit_index))
+	if (game_engine_running() || !shoulder_camera_unit_on_foot(unit_index))
 		return FALSE;
 	unit = unit_get(unit_index);
-	return unit->unit.player_index != NONE && unit_get_zoom_level(unit_index) == NONE;
+	return unit->unit.player_index != NONE && shoulder_camera_unit_mode(unit) != _shoulder_camera_off &&
+		unit_get_zoom_level(unit_index) == NONE;
 }
 
 void shoulder_camera_new(
@@ -256,9 +282,9 @@ static void shoulder_camera_pose(
 }
 
 static real shoulder_camera_side_sign(
-	void)
+	short mode)
 {
-	return shoulder_camera_setting() == _shoulder_camera_left ? -1.f : 1.f;
+	return mode == _shoulder_camera_left ? -1.f : 1.f;
 }
 
 void shoulder_camera_update(
@@ -285,7 +311,7 @@ void shoulder_camera_update(
 	unit_get_camera_position(unit_index, &eye);
 
 	/* pulled in at once by a wall, eased back out when it is gone */
-	side_wanted = SHOULDER_CAMERA_SIDE * shoulder_camera_side_sign();
+	side_wanted = SHOULDER_CAMERA_SIDE * shoulder_camera_side_sign(shoulder_camera_setting());
 	distance_wanted = SHOULDER_CAMERA_DISTANCE;
 	if (camera->initialized)
 	{
@@ -337,7 +363,8 @@ void shoulder_camera_deterministic(
 
 	unit_get_camera_position(unit_index, &eye);
 	*forward = unit->unit.aiming_vector;
-	shoulder_camera_pose(unit_index, &eye, forward, SHOULDER_CAMERA_SIDE * shoulder_camera_side_sign(),
+	shoulder_camera_pose(unit_index, &eye, forward,
+		SHOULDER_CAMERA_SIDE * shoulder_camera_side_sign(shoulder_camera_unit_mode(unit)),
 		SHOULDER_CAMERA_DISTANCE, position, &side, &height, &distance);
 	return;
 }

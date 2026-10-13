@@ -69,11 +69,12 @@ Raise it with any change to what the machines send each other. */
 /* port (opence-mods): the mods' builds send messages of their own (a co-op
 host's addons and each player's armor: port/linux/game/network_addons.c),
 and graft the host's addons as a level loads, which a build without them
-does not: their version is this bit and the upstream one (27), so that
-neither joins the other's games, and the player is told why
-(network_client_manager.c) */
+does not: their version is this bit and the upstream one (27, the low
+byte), so that neither joins the other's games, and the player is told why
+(network_client_manager.c); bits 8 to 11 are the mods' own revision of what
+they send (2: every player's camera, network_addons.c) */
 #define HALO_PORT_NETWORK_VERSION_MODS 0x4000
-#define HALO_PORT_NETWORK_VERSION 16411 /* 27 | HALO_PORT_NETWORK_VERSION_MODS */
+#define HALO_PORT_NETWORK_VERSION 16667 /* 27 | 1 << 8 | HALO_PORT_NETWORK_VERSION_MODS */
 /* ... the advertisement's reserved bytes: the version (a little-endian word),
 then flags */
 #define HALO_PORT_ADVERTISED_VERSION_OFFSET 0

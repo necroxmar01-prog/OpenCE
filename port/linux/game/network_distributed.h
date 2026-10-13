@@ -129,6 +129,9 @@ enum
 	too, reliably: the host's addons, one a message; a client's armor */
 	_distributed_message_addons = 87,
 	_distributed_message_armor_dress = 88,
+	/* ... and every player's camera, the host's to the clients (over the
+	shoulder, shots go where its camera points: shoulder_camera.c) */
+	_distributed_message_player_cameras = 89,
 
 	NUMBER_OF_DISTRIBUTED_MESSAGES
 };

@@ -27,14 +27,20 @@ struct shoulder_camera
 	real side;
 };
 
+/* this machine's camera setting (display.camera): 0 first person, 1 over
+the right shoulder, 2 over the left (network_addons.c tells the others) */
+short shoulder_camera_local_mode(
+	void);
+
 /* whether the local player's view is over the shoulder: display.camera
-asks for it, a campaign (no multiplayer, no network co-op), the player on
-foot, alive and not zoomed (a scope looks through the eye) */
+asks for it, a campaign alone or in network co-op (not multiplayer), the
+player on foot, alive and not zoomed (a scope looks through the eye) */
 boolean shoulder_camera_wanted(
 	short local_player_index);
 
 /* the same, for a unit a player controls, from the simulation's side (the
-projectiles' aim, aim_assist.c) */
+projectiles' aim, aim_assist.c), with that player's camera (another
+machine's player's in network co-op) */
 boolean shoulder_camera_wanted_for_unit(
 	long unit_index);
 

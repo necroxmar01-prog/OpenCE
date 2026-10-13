@@ -1085,6 +1085,29 @@ short player_armor_network_addons(
 	return count;
 }
 
+boolean player_armor_addon_of_biped(
+	char const *biped,
+	char *addon,
+	long size)
+{
+	short armor;
+
+	armor_catalog_ensure();
+	if (!biped || !biped[0] || size <= 0)
+		return FALSE;
+	for (armor = 0; armor < player_armor_globals.count; armor++)
+	{
+		struct player_armor const *definition = &player_armor_globals.armors[armor];
+
+		if (definition->addon[0] && !_stricmp(definition->biped, biped))
+		{
+			armor_copy(addon, definition->addon, (size_t)size);
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
 void player_armor_unit_created(
 	short local_player_index,
 	long unit_index)

@@ -12,7 +12,7 @@ ARMOR, before a mission): player_armor.c.
 armor line, and the executable: opence-mods reads it to tell an older
 patched build, which lacks what newer mods need, from this one). One more
 with each patch to the mods' code. */
-#define PLAYER_ARMOR_PATCH_TEXT "opence-mods patch 12"
+#define PLAYER_ARMOR_PATCH_TEXT "opence-mods patch 13"
 
 /* what an armor puts on a player's unit: the biped (empty: the map's player
 unit), whether it wears the profile's colour, and the permutation of each
@@ -83,6 +83,9 @@ void player_armor_local_dress(struct player_armor_dress *dress);
 then those of armors of pieces; their bipeds */
 short player_armor_network_addons(char (*addons)[PLAYER_ARMOR_DRESS_NAME + 16],
 	char (*bipeds)[PLAYER_ARMOR_DRESS_BIPED], short maximum);
+/* (network co-op's host) the addon of this machine's armor of the biped (one
+a client's player wears), else FALSE */
+boolean player_armor_addon_of_biped(char const *biped, char *addon, long size);
 
 /* (game_state.c, a saved game loaded) its local players to be put in the
 armor chosen, by player_armor_update (players.c, each tick) once they can be */
