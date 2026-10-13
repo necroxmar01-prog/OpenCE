@@ -924,8 +924,18 @@ boolean network_addons_mismatch(
 	}
 	if (text && size > 0)
 	{
-		usnprintf(text, size - 1, L"Your game did not load the host's mods as the host did\r\n"
-			L"(%ld tags, the host %ld): leave and join again", tag_count, network_addons.host_tag_count);
+		/* (the same addons, grafted the same, onto another table: this
+		machine's map is not the host's, another edition of the game's) */
+		if (signature == network_addons.host_tags_signature)
+		{
+			usnprintf(text, size - 1, L"This level's map file is not the host's (%ld tags, the host %ld):\r\n"
+				L"the game data of one of you is another edition", tag_count, network_addons.host_tag_count);
+		}
+		else
+		{
+			usnprintf(text, size - 1, L"Your game did not load the host's mods as the host did\r\n"
+				L"(%ld tags, the host %ld): leave and join again", tag_count, network_addons.host_tag_count);
+		}
 		text[size - 1] = 0;
 	}
 	return TRUE;
