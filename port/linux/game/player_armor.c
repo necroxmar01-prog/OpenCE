@@ -996,7 +996,10 @@ static boolean armor_coop_dress(long player_index, short local_player_index, str
 {
 	if (!armor_campaign_map() || game_engine_running() || !network_coop_active() || network_game_distributed_client())
 		return FALSE;
-	if (local_player_index != NONE)
+	/* (this machine's player: the armor chosen here, even before the
+	player is tied to its controller) */
+	if (local_player_index != NONE || (player_index != NONE &&
+		player_get(player_index)->network_player_data.machine_index == network_game_client_get_local_machine_index()))
 	{
 		armor_dress_of(armor_get(player_armor_selected()), dress);
 		return TRUE;
@@ -1303,17 +1306,46 @@ static boolean armor_coop_redress_player(
 	return TRUE;
 }
 
-/* network co-op's host, twice a second: every player in its armor */
+/* network co-op's host, twice a second: every player in its armor. Each
+player's unit is logged when it changes, however it was made. */
 static void armor_coop_redress(
 	void)
 {
+	static long logged_units[HALO_PORT_MAXIMUM_NETWORK_PLAYERS];
+	static long logged_scenario = NONE;
 	struct data_iterator iterator;
+	struct player_datum *player;
 
 	if (!network_coop_active() || network_game_distributed_client() || game_time_get() % 15 != 0)
 		return;
+	if (logged_scenario != global_scenario_index)
+	{
+		struct player_armor const *armor = armor_get(player_armor_selected());
+		long index;
+
+		logged_scenario = global_scenario_index;
+		for (index = 0; index < HALO_PORT_MAXIMUM_NETWORK_PLAYERS; index++)
+			logged_units[index] = NONE;
+		error(_error_silent, "armor: this machine (#%d) wears %s (%s)", network_game_client_get_local_machine_index(),
+			armor->id, armor->biped[0] ? armor->biped : "the level's Spartan");
+	}
 	data_iterator_new(&iterator, player_data);
-	while (data_iterator_next(&iterator))
+	while ((player = data_iterator_next(&iterator)) != NULL)
+	{
+		long absolute = DATUM_INDEX_TO_ABSOLUTE_INDEX(iterator.datum_index);
+
 		armor_coop_redress_player(iterator.datum_index);
+		if (absolute >= 0 && absolute < HALO_PORT_MAXIMUM_NETWORK_PLAYERS && player->unit_index != logged_units[absolute])
+		{
+			logged_units[absolute] = player->unit_index;
+			if (player->unit_index != NONE)
+			{
+				error(_error_silent, "armor: co-op player %ld (machine #%d, local %d) is in %s", absolute,
+					player->network_player_data.machine_index, player->local_player_index,
+					tag_get_name(object_get(player->unit_index)->definition_index));
+			}
+		}
+	}
 }
 
 void player_armor_update(
