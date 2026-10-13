@@ -1631,6 +1631,9 @@ static struct
 	/* the armor on the first row, and the armor chosen */
 	short first;
 	short armor;
+	/* A on an armor's row opened its pieces: the list's other handler of
+	the activation ("port armor select") does nothing then */
+	boolean pieces_opened;
 } armor_list;
 
 static void armor_row_text(short row, wchar_t *text)
@@ -1683,7 +1686,7 @@ static void armor_list_update(struct widget_instance *list)
 		wchar_t text[ARMOR_DESCRIPTION_LENGTH];
 		short length;
 
-		static wchar_t const pieces[] = L"\r\n\r\nPIECES: choose its helmet,\r\nchest and shoulders.";
+		static wchar_t const pieces[] = L"\r\n\r\nA: choose its helmet,\r\nchest and shoulders.";
 
 		player_armor_description(armor_list.armor, text, ARMOR_DESCRIPTION_LENGTH);
 		length = (short)ustrlen(text);
@@ -1702,9 +1705,15 @@ static void armor_list_update(struct widget_instance *list)
 	profile_name_show(description);
 }
 
-/* "port armor select": the armor chosen, worn from the next mission on */
+/* "port armor select": the armor chosen, worn from the next mission on
+(not when A on its row opened its pieces: "port armor row pieces") */
 static boolean armor_choose(void)
 {
+	if (armor_list.pieces_opened)
+	{
+		armor_list.pieces_opened = FALSE;
+		return FALSE;
+	}
 	player_armor_select(armor_list.armor);
 	return TRUE;
 }
@@ -1727,14 +1736,36 @@ static struct
 	short option;
 } armor_pieces;
 
-/* "port armor pieces open" (PIECES): the armor of the list's row, worn now,
-if it has pieces (else nothing opens) */
+/* "port armor pieces open" (PIECES): the armor of the list's last row, worn
+now, if it has pieces, else the armor worn if it has (going down to the
+button with a controller passes other rows), else nothing opens */
 static boolean armor_pieces_open(void)
 {
-	if (player_armor_piece_count(armor_list.armor) <= 0)
+	short armor = armor_list.armor;
+
+	if (player_armor_piece_count(armor) <= 0)
+		armor = player_armor_selected();
+	if (player_armor_piece_count(armor) <= 0)
+		return FALSE;
+	armor_pieces.armor = armor;
+	player_armor_select(armor);
+	return TRUE;
+}
+
+/* "port armor row pieces" (A on an armor's row, the list's activation): an
+armor with pieces opens them, worn now, rather than closing the list as the
+others do ("port armor select" then does nothing); not OK's activation (the
+focus on the buttons) */
+static boolean armor_row_pieces(struct widget_instance *list)
+{
+	short row = focused_row(list);
+
+	armor_list.pieces_opened = FALSE;
+	if (row == NONE || row >= ARMOR_ROWS || player_armor_piece_count(armor_list.armor) <= 0)
 		return FALSE;
 	armor_pieces.armor = armor_list.armor;
 	player_armor_select(armor_list.armor);
+	armor_list.pieces_opened = TRUE;
 	return TRUE;
 }
 
@@ -5935,6 +5966,10 @@ boolean pc_menu_event_function_invoke(
 		else if (!strcmp(name, "port armor pieces open"))
 		{
 			return armor_pieces_open();
+		}
+		else if (!strcmp(name, "port armor row pieces"))
+		{
+			return armor_row_pieces(widget);
 		}
 		else if (!strcmp(name, "port armor pieces initialize"))
 		{

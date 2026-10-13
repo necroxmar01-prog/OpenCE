@@ -390,7 +390,7 @@ static char const *const port_function_names[] =
 	/* (Change Color's ARMOR: the campaign Spartan's armor, player_armor.c) */
 	"port armor list initialize", "port armor select",
 	/* (ARMOR's PIECES: an armor's helmet, chest, shoulders, each chosen) */
-	"port armor pieces open", "port armor pieces initialize", "port armor piece open",
+	"port armor pieces open", "port armor row pieces", "port armor pieces initialize", "port armor piece open",
 	"port armor options initialize", "port armor option select",
 };
 

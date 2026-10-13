@@ -237,7 +237,8 @@ static void armor_text_from_ascii(char const *source, wchar_t *text, short lengt
 
 	while (source[count] && count < length - 1)
 	{
-		text[count] = (wchar_t)(unsigned char)source[count];
+		/* (the menus' line break: draw_string.c) */
+		text[count] = source[count] == '\n' ? L'\r' : (wchar_t)(unsigned char)source[count];
 		count++;
 	}
 	text[count] = 0;

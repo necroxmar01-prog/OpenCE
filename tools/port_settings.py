@@ -538,6 +538,9 @@ def _armor_screen() -> list:
                       ("description", f"{ARMOR}/armor_select_extended_desc")],
                      ['<data input="port armor list update"/>',
                       '<on event="created" run="port armor list initialize"/>',
+                      # (A on an armor with pieces opens them: going down to
+                      # PIECES with a controller passes the other rows)
+                      f'<on event="custom_activation" run="port armor row pieces" open="{ARMOR}/pieces_screen"/>',
                       '<on event="custom_activation" run="port armor select" back="true"/>',
                       *rows, f'<child widget="{ARMOR}/armor_button_bar" y="414"/>'])
     lines += _widget(f"{ARMOR}/armor_select_extended_desc", [("width", 640), ("height", 480)],

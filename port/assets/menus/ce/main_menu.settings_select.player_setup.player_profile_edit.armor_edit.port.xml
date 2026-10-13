@@ -19,6 +19,7 @@
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_select_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/armor_select_extended_desc">
 		<data input="port armor list update"/>
 		<on event="created" run="port armor list initialize"/>
+		<on event="custom_activation" run="port armor row pieces" open="main_menu/settings_select/player_setup/player_profile_edit/armor_edit/pieces_screen"/>
 		<on event="custom_activation" run="port armor select" back="true"/>
 		<child widget="main_menu/new_select/list_item_0" x="20" y="73"/>
 		<child widget="main_menu/new_select/list_item_1" x="20" y="103"/>
