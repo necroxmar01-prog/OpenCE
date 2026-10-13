@@ -28,6 +28,7 @@ It also draws the line telling players about the vote to skip a cutscene
 
 #include "coop_spectate.h"
 #include "network_coop.h"
+#include "network_addons.h"
 
 #include <math.h>
 
@@ -246,9 +247,16 @@ void coop_spectate_draw(
 	short local_player_index)
 {
 	long watched = coop_spectate_watched[local_player_index];
-	wchar_t text[96];
+	wchar_t text[160];
 	wchar_t const *hint;
 
+	/* a level built without the host's mods cannot show the host's players
+	correctly: say so before anything else */
+	if (network_addons_mismatch(text, NUMBEROF(text)))
+	{
+		draw_bottom_text(text);
+		return;
+	}
 	/* nobody to watch yet (still joining): network_coop.c shows the host's
 	view from behind instead */
 	if (watched == NONE || !player_try_and_get(watched))
@@ -264,6 +272,16 @@ void coop_spectate_draw(
 	usnprintf(text, NUMBEROF(text) - 1, L"SPECTATING %.12s   (A: NEXT)\r\n%s", player_get(watched)->name, hint);
 	text[NUMBEROF(text) - 1] = 0;
 	draw_bottom_text(text);
+}
+
+void coop_mismatch_draw(
+	short local_player_index)
+{
+	wchar_t text[160];
+
+	/* once, for the first local player */
+	if (local_player_index == local_player_get_next(NONE) && network_addons_mismatch(text, NUMBEROF(text)))
+		draw_bottom_text(text);
 }
 
 void coop_skip_vote_draw(

@@ -38,6 +38,10 @@ void coop_spectate_camera(
 void coop_spectate_draw(
 	short local_player_index);
 
+/* tells a network co-op client its level was not built as the host's was */
+void coop_mismatch_draw(
+	short local_player_index);
+
 /* during a skippable cutscene in network co-op, the vote count and how to vote */
 void coop_skip_vote_draw(
 	short local_player_index);

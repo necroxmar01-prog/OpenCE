@@ -16,7 +16,7 @@ chose.
 
 enum
 {
-	NETWORK_ADDONS_MAXIMUM = 12,
+	NETWORK_ADDONS_MAXIMUM = 24,
 	NETWORK_ADDON_NAME_LENGTH = 48,
 	NETWORK_ADDON_PATH_LENGTH = 256,
 	/* where a client keeps the host's addons, named for their hashes */
@@ -64,6 +64,13 @@ addons whole: no game starts before every machine has (one that loaded the
 level without one would not have the host's tags) */
 boolean network_addons_machine_ready(
 	long machine_index);
+
+/* (a client, coop_spectate.c) whether its level is not the host's as the
+addons left it (a level loaded without one of the host's: the players would
+not see each other), with words for the player; logged once */
+boolean network_addons_mismatch(
+	wchar_t *text,
+	short size);
 
 /* (shoulder_camera.c) the camera of a player of another machine: 0 first
 person, 1 over the right shoulder, 2 over the left (as its machine told the

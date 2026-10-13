@@ -15,7 +15,9 @@ opence-mods writes for the weapon the player chose it to replace:
 addon: the addon (d:\addons\<addon>.map) that holds the mod's tags; root:
 the tag of it grafted onto the level with all it needs (addon_tags.c);
 replace: one of the level's tags whose data the mod's stands in for (up to
-four: a weapon, or a first-person model and its animations). The level's
+four: a weapon, or a first-person model and its animations; a vehicle; a
+HUD's tags, in several files of one addon, whose root "*" grafts every tag
+of it). The level's
 tag keeps its index, so everything that names it (the scenario's weapons,
 the AI's, the starting profiles, saved games) gets the mod's instead.
 
@@ -54,6 +56,13 @@ static struct
 	{ ".sound", 'snd!' },
 	{ ".bitmap", 'bitm' },
 	{ ".weapon_hud_interface", 'wphi' },
+	/* (a vehicle's, and a HUD's: the units', grenades' and numbers' HUD
+	tags, and its sounds) */
+	{ ".vehicle", 'vehi' },
+	{ ".unit_hud_interface", 'unhi' },
+	{ ".grenade_hud_interface", 'grhi' },
+	{ ".hud_number", 'hud#' },
+	{ ".sound_looping", 'lsnd' },
 };
 
 static char *weapon_mods_trim(
@@ -144,7 +153,13 @@ static boolean weapon_mods_read(
 		}
 		else if (!_stricmp(key, "root"))
 		{
-			if (!weapon_mods_tag(value, mod->root, sizeof(mod->root), &mod->root_group))
+			/* ("*": every tag of the addon, a HUD's, addon_graft.c) */
+			if (!strcmp(value, "*"))
+			{
+				weapon_mods_copy(mod->root, "*", sizeof(mod->root));
+				mod->root_group = 0;
+			}
+			else if (!weapon_mods_tag(value, mod->root, sizeof(mod->root), &mod->root_group))
 				error(_error_silent, "weapon %s: root '%s' is not a tag with an extension", id, value);
 		}
 		else if (!_stricmp(key, "replace"))

@@ -125,12 +125,19 @@ replace = weapons\assault rifle\assault rifle.weapon -> weapons\cad assault rifl
 | Key | What it is |
 | --- | --- |
 | `addon` | The addon whose tags the weapon mod uses. |
-| `root` | The tag grafted from that addon, with everything it needs. |
-| `replace` | One of the level's tags whose data the mod's tag stands in for, of the same group, given with extensions. Up to four. |
+| `root` | The tag grafted from that addon, with everything it needs; `*` grafts every tag of the addon (but its scenario, globals and structure). |
+| `replace` | One of the level's tags whose data the mod's tag stands in for, of the same group, given with extensions. Up to four. The groups: weapons, their first-person models and animations, vehicles, unit, weapon and grenade HUD interfaces, HUD numbers, bitmaps, sounds and looping sounds. |
 
 A pack that brings only a weapon's first-person model and animations gets
 two `replace` lines, one for the game weapon's `fp\fp.model` and one for
 its `fp\fp.model_animations`. Its addon's root is a weapon that names them.
+
+A vehicle replaces the game's (`vehicles\warthog\warthog.vehicle` and
+`mp_warthog.vehicle`, say) as a weapon does. A HUD pack replaces the level's
+unit, weapon and grenade HUD interfaces, its HUD digits and motion sensor
+sweep: more than four replacements, so it is written as several files
+(`<id>-1.txt`, `<id>-2.txt`...) with one addon and the root `*`. Files that
+share an addon and root graft it once.
 
 As a level loads, `addon_tags.c` grafts the addons one after another: the
 armor's first, then each weapon mod's. Each addon is grafted onto the table
@@ -174,6 +181,13 @@ game must graft the same addons in the same order. They are the host's
   made it. A biped the game has not (an armor whose addon the host does not
   offer) spawns the level's Spartan; colours are co-op's own (each profile's).
 
+The host also tells each client of its level's tag table
+(`_distributed_message_player_cameras`: the addons' signature and the
+number of tags, once its own level is loaded). A client whose level does
+not have the same is logged (`network addons: this level is not the
+host's`) and told so on screen (`coop_mismatch_draw`): the players' objects
+would be other tags there.
+
 A client whose host has not told it of its addons in two minutes loads the
 level as it is (every host of the mods' network version tells of them, an
 empty set too). The over-the-shoulder camera's part is in
@@ -197,7 +211,7 @@ taken.
 
 ## Limits
 
-- One armor at a time, the one chosen, and up to eight weapon mods.
+- One armor at a time, the one chosen, and up to 24 weapon mods.
 - A weapon mod whose tags have the same names as the game's adds nothing:
   the level's own tags are the ones used.
 - A saved game names tags by index, so it is loaded only where its

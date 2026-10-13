@@ -1412,6 +1412,9 @@ void hud_draw_screen(
 		/* port: who a dead network co-op player is watching */
 		if (player->unit_index == NONE && coop_spectating() && !cinematic_in_progress())
 			coop_spectate_draw(render.local_player_index);
+		/* port: a network co-op client whose level does not match the host's */
+		else if (network_coop_active() && !cinematic_in_progress())
+			coop_mismatch_draw(render.local_player_index);
 		/* port: the network co-op vote to skip a cinematic */
 		if (cinematic_in_progress())
 			coop_skip_vote_draw(render.local_player_index);

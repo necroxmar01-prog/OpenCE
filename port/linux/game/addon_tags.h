@@ -45,4 +45,9 @@ the game's weapon saved without it would not fit it). */
 unsigned long addon_tags_signature(
 	boolean *replaced);
 
+/* (network co-op: network_addons.c) the loaded level's tags with its
+addons', 0 before one loaded with addons tried */
+long addon_tags_tag_count(
+	void);
+
 #endif

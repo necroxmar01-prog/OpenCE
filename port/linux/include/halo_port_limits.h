@@ -72,9 +72,10 @@ and graft the host's addons as a level loads, which a build without them
 does not: their version is this bit and the upstream one (27, the low
 byte), so that neither joins the other's games, and the player is told why
 (network_client_manager.c); bits 8 to 11 are the mods' own revision of what
-they send (2: every player's camera, network_addons.c) */
+they send (1: every player's camera; 2: 24 addons a set, several weapon
+mods of one addon: network_addons.c) */
 #define HALO_PORT_NETWORK_VERSION_MODS 0x4000
-#define HALO_PORT_NETWORK_VERSION 16667 /* 27 | 1 << 8 | HALO_PORT_NETWORK_VERSION_MODS */
+#define HALO_PORT_NETWORK_VERSION 16923 /* 27 | 2 << 8 | HALO_PORT_NETWORK_VERSION_MODS */
 /* ... the advertisement's reserved bytes: the version (a little-endian word),
 then flags */
 #define HALO_PORT_ADVERTISED_VERSION_OFFSET 0

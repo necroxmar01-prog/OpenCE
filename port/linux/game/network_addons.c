@@ -58,6 +58,8 @@ same order (addon_tags.c). In a co-op game they are the host's:
 #include "network_distributed.h"
 #include "network_addons.h"
 #include "shoulder_camera.h"
+#include "addon_tags.h"
+#include "text/unicode.h"
 
 #include <xtl.h>
 #include <stdio.h>
@@ -143,6 +145,10 @@ struct distributed_armor_dress
 indices; 0: first person) */
 struct distributed_player_cameras
 {
+	/* the host's level as its addons left it (addon_tags.c): a client whose
+	own is not has not the host's tags, and is told (network_addons_mismatch) */
+	unsigned long tags_signature;
+	long tag_count;
 	word count;
 	word pad;
 	struct
@@ -201,6 +207,11 @@ static struct
 	unsigned long cameras_sent_signature[NETWORK_ADDONS_MACHINES];
 	unsigned long cameras_sent_address[NETWORK_ADDONS_MACHINES];
 	byte player_cameras[NETWORK_ADDONS_CAMERA_PLAYERS];
+	/* a client: the host's level as its addons left it, and whether this
+	machine's was told of as different (logged once) */
+	unsigned long host_tags_signature;
+	long host_tag_count;
+	boolean mismatch_logged;
 
 	/* a client: the set the host told of (whole once every addon of it came),
 	the one coming, and since when this game has waited for it */
@@ -351,18 +362,10 @@ static void host_build(
 			struct weapon_mod const *mod = &mods[index - armor_count];
 			short replacement;
 
-			/* (two of one addon's, the same tag: one, as addon_tags.c reads them) */
-			for (other = 0; other < set.count; other++)
-			{
-				if (set.addons[other].entry.role == _network_addon_weapon &&
-					!_stricmp(set.addons[other].base_name, mod->addon) &&
-					!_stricmp(set.addons[other].entry.root, mod->root))
-				{
-					shared = TRUE;
-				}
-			}
-			if (shared)
-				continue;
+			/* (several of one addon and root, a HUD's: each told of, with its
+			replacements; addon_tags.c grafts the addon once) */
+			(void)other;
+			(void)shared;
 			addon->entry.role = _network_addon_weapon;
 			addon->entry.root_group = mod->root_group;
 			addons_copy(addon->entry.root, mod->root, sizeof(addon->entry.root));
@@ -446,6 +449,12 @@ static void host_cameras(
 
 	csmemset(cameras, 0, sizeof(*cameras));
 	csmemset(network_addons.player_cameras, 0, sizeof(network_addons.player_cameras));
+	/* (only once the host's own level is loaded: in the lobby, none) */
+	if (game_map_loaded() && global_scenario_index != NONE && global_scenario_get()->type == _scenario_type_solo)
+	{
+		cameras->tags_signature = addon_tags_signature(NULL);
+		cameras->tag_count = addon_tags_tag_count();
+	}
 	data_iterator_new(&iterator, player_data);
 	while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
 	{
@@ -472,7 +481,7 @@ static void host_cameras(
 static unsigned long cameras_signature(
 	struct distributed_player_cameras const *cameras)
 {
-	unsigned long signature = 0x0CA3E7A5;
+	unsigned long signature = 0x0CA3E7A5 ^ cameras->tags_signature ^ (unsigned long)cameras->tag_count;
 	word index;
 
 	for (index = 0; index < cameras->count; index++)
@@ -889,6 +898,39 @@ boolean network_addons_machine_ready(
 	return network_addons.dress_valid[machine_index] && network_addons.machine_ready[machine_index] == set->signature;
 }
 
+boolean network_addons_mismatch(
+	wchar_t *text,
+	short size)
+{
+	long tag_count = addon_tags_tag_count();
+	unsigned long signature = addon_tags_signature(NULL);
+
+	if (addons_host() || !global_network_game_client_get() || !game_in_progress() ||
+		!network_addons.host_tag_count || !tag_count)
+	{
+		return FALSE;
+	}
+	if (signature == network_addons.host_tags_signature && tag_count == network_addons.host_tag_count)
+	{
+		network_addons.mismatch_logged = FALSE;
+		return FALSE;
+	}
+	if (!network_addons.mismatch_logged)
+	{
+		network_addons.mismatch_logged = TRUE;
+		error(_error_silent, "network addons: this level is not the host's: %ld tags (the host's %ld), "
+			"addons %08lX (the host's %08lX)", tag_count, network_addons.host_tag_count, signature,
+			network_addons.host_tags_signature);
+	}
+	if (text && size > 0)
+	{
+		usnprintf(text, size - 1, L"Your game did not load the host's mods as the host did\r\n"
+			L"(%ld tags, the host %ld): leave and join again", tag_count, network_addons.host_tag_count);
+		text[size - 1] = 0;
+	}
+	return TRUE;
+}
+
 short network_addons_player_camera(
 	long player_index)
 {
@@ -1022,6 +1064,8 @@ void network_addons_handle_message(
 		csmemcpy(&cameras, entries, sizeof(cameras));
 		if (cameras.count > NETWORK_ADDONS_CAMERA_PLAYERS)
 			return;
+		network_addons.host_tags_signature = cameras.tags_signature;
+		network_addons.host_tag_count = cameras.tag_count;
 		csmemset(network_addons.player_cameras, 0, sizeof(network_addons.player_cameras));
 		for (index = 0; index < cameras.count; index++)
 		{
@@ -1086,5 +1130,8 @@ void network_addons_update(
 		network_addons.loaded = FALSE;
 		network_addons.game_level[0] = 0;
 		csmemset(network_addons.player_cameras, 0, sizeof(network_addons.player_cameras));
+		network_addons.host_tags_signature = 0;
+		network_addons.host_tag_count = 0;
+		network_addons.mismatch_logged = FALSE;
 	}
 }

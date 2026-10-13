@@ -576,8 +576,30 @@ long addon_graft_tags(
 	for (index = 0; index < addon->tag_count; index++)
 		map[index] = NONE;
 
-	root = addon_graft_find(addon->instances, addon->tag_count, root_group, root_name);
-	if (root == NONE)
+	/* "*": every tag of the addon (a HUD's: what it brings is several tags
+	the game's stand in for, weapon_mods.c), the level's of their names
+	standing for theirs as for any other, but the addon's scenario, globals
+	and structures; each a tag the validator knows */
+	if (root_name && !strcmp(root_name, "*"))
+	{
+		for (index = 0; index < addon->tag_count && !walk.failed; index++)
+		{
+			unsigned long group_tag = addon->instances[index].group_tag;
+
+			if (group_tag == 'scnr' || group_tag == 'matg' || group_tag == 'sbsp' ||
+				!graft_group_get(group_tag) || !addon->instances[index].name)
+			{
+				continue;
+			}
+			graft_need(&walk, index);
+		}
+		if (walk.failed)
+			return NONE;
+		root = NONE;
+	}
+	else
+		root = addon_graft_find(addon->instances, addon->tag_count, root_group, root_name);
+	if (root == NONE && walk.queue_count == 0)
 	{
 		char message[320];
 
@@ -587,6 +609,7 @@ long addon_graft_tags(
 	}
 	/* (the root is always the addon's own, even if the level has one of its
 	name: it is what the addon is for) */
+	if (root != NONE)
 	{
 		long absolute = root & 0xFFFF;
 

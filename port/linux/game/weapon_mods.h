@@ -14,7 +14,8 @@ points the game's tag at the mod's.
 
 enum
 {
-	WEAPON_MODS_MAXIMUM = 8,
+	/* (a HUD takes several: four replacements each) */
+	WEAPON_MODS_MAXIMUM = 24,
 	WEAPON_MOD_MAXIMUM_REPLACEMENTS = 4,
 	WEAPON_MOD_NAME_LENGTH = 256,
 };

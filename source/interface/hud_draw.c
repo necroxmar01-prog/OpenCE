@@ -1510,6 +1510,12 @@ void hud_draw_static_element(
 				clip = &default_clip;
 
 			xy_scale = static_element->placement.scale;
+			/* port: at half its size, as the element (hud_draw_bitmap_with_meter) */
+			if (TEST_FLAG(static_element->placement.multiplayer_scaling_flags, _hud_use_high_resolution_scale_bit))
+			{
+				xy_scale.i *= 0.5f;
+				xy_scale.j *= 0.5f;
+			}
 
 			hud_calculate_point(
 				render.local_player_index,
@@ -1662,6 +1668,15 @@ static void hud_draw_bitmap_with_meter(
 
 	xy_scale.i = placement->scale.i*scale;
 	xy_scale.j = placement->scale.j*scale;
+	/* port: Halo PC draws an element flagged to use its high resolution
+	scale at half its size (Custom Edition maps' HUDs drawn from bitmaps
+	twice the size), but for a crosshair, drawn at its size */
+	if (TEST_FLAG(placement->multiplayer_scaling_flags, _hud_use_high_resolution_scale_bit) &&
+		!is_crosshair_bitmap)
+	{
+		xy_scale.i *= 0.5f;
+		xy_scale.j *= 0.5f;
+	}
 
 	hud_calculate_point(
 		render.local_player_index,

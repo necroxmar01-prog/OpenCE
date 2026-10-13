@@ -135,8 +135,10 @@ static struct
 	game's) */
 	struct addon_graft_instance *tables[ADDON_TAGS_MAXIMUM_ADDONS];
 	short table_count;
-	/* what was grafted, for saved games (addon_tags_signature) */
+	/* what was grafted, for saved games (addon_tags_signature), and the
+	table's tags then (addon_tags_tag_count) */
 	unsigned long signature;
+	long tag_count;
 	boolean replaced;
 } addon_tags;
 
@@ -345,9 +347,28 @@ boolean addon_tags_prepare(
 				addon->weapon_mod = NONE;
 				if (network[index].weapon)
 				{
+					short other;
+					boolean shared = FALSE;
+
 					if (weapon_count >= WEAPON_MODS_MAXIMUM)
 						continue;
 					addon_tags.weapon_mods[weapon_count] = network[index].weapon_mod;
+					/* (several weapon mods of one addon and root, a HUD's:
+					read once, grafted once, each one's replacements made) */
+					for (other = 0; other < addon_tags.addon_count; other++)
+					{
+						if (addon_tags.addons[other].weapon_mod != NONE &&
+							!_stricmp(addon_tags.addons[other].name, network[index].name) &&
+							!_stricmp(addon_tags.addons[other].root, network[index].root))
+						{
+							shared = TRUE;
+						}
+					}
+					if (shared)
+					{
+						weapon_count++;
+						continue;
+					}
 					addon->weapon_mod = weapon_count++;
 				}
 				addon->root_group = network[index].root_group;
@@ -436,6 +457,28 @@ static boolean addon_tags_weapon_mod_wanted(
 	return FALSE;
 }
 
+/* whether the level has a game tag any weapon mod of this one's addon and
+root replaces (a HUD's several) */
+static boolean addon_tags_weapon_mods_wanted(
+	struct weapon_mod const *mod,
+	struct addon_graft_instance const *table,
+	long count)
+{
+	short other;
+
+	for (other = 0; other < (short)WEAPON_MODS_MAXIMUM; other++)
+	{
+		struct weapon_mod const *each = &addon_tags.weapon_mods[other];
+
+		if (each->addon[0] && !_stricmp(each->addon, mod->addon) && each->root_group == mod->root_group &&
+			!_stricmp(each->root, mod->root) && addon_tags_weapon_mod_wanted(each, table, count))
+		{
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
 /* the weapon mod's game tags pointed at its own data (each keeps its index
 and name: everything that names it gets the mod's) */
 static void addon_tags_weapon_mod_replace(
@@ -493,9 +536,10 @@ void addon_tags_loaded(
 	long count;
 	short index;
 
+	table = cache_files_tag_instances(&level_count);
+	addon_tags.tag_count = table ? level_count : 0;
 	if (!addon_tags.addon_count)
 		return;
-	table = cache_files_tag_instances(&level_count);
 	if (!table)
 	{
 		addon_tags_release();
@@ -513,7 +557,7 @@ void addon_tags_loaded(
 
 		if (!header)
 			continue;
-		if (mod && !addon_tags_weapon_mod_wanted(mod, table, count))
+		if (mod && !addon_tags_weapon_mods_wanted(mod, table, count))
 		{
 			error(_error_silent, "weapon %s: this level has not the weapon it replaces", mod->id);
 			continue;
@@ -566,6 +610,7 @@ void addon_tags_loaded(
 	}
 	if (addon_tags.table_count)
 		cache_files_set_tag_instances(table, count);
+	addon_tags.tag_count = count;
 }
 
 boolean addon_tags_read(
@@ -605,6 +650,12 @@ void addon_tags_unloaded(
 	void)
 {
 	addon_tags_release();
+}
+
+long addon_tags_tag_count(
+	void)
+{
+	return addon_tags.tag_count;
 }
 
 unsigned long addon_tags_signature(
