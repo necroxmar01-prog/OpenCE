@@ -203,6 +203,12 @@ screen shows) and says which version it is by the map version of the game
 record, its hash's first 32 bits (the header checksum before), which a
 client finds its file by (below, "Map sharing").
 
+The opence-mods builds (the fork's branch of that name) add co-op's addons,
+armors and players' cameras to what the machines send, and play only with
+each other: their version is upstream's, with the branch's revision of its
+messages above it and bit 14 set (`HALO_PORT_NETWORK_VERSION_MODS`), so
+version 16925 is upstream's 29, revision 2.
+
 `port/linux/network_format.txt` records the wire format of the current
 version (`tools/network_format.py`): `test_linux_port.py` fails when the
 sources' messages, kinds, bits, structs sent whole or the sizes of their
