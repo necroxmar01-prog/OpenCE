@@ -74,6 +74,16 @@ def main() -> int:
     if os.environ.get("GITHUB_REF") == "refs/heads/main" and os.environ.get("GITHUB_RUN_NUMBER", "").isdigit():
         os.environ["HALO_BUILD_NUMBER"] = os.environ["GITHUB_RUN_NUMBER"]
         print(f"build number {os.environ['HALO_BUILD_NUMBER']}", flush=True)
+    # opence-mods: the Android app of a build of the fork's branch knows its
+    # number too, and looks for its updates in the fork's releases (mods-<n>,
+    # the workflow's mods-release); its Linux build is updated by opence-mods
+    elif (os.environ.get("GITHUB_REF") == "refs/heads/opence-mods" and args.platform == "android" and
+          os.environ.get("GITHUB_RUN_NUMBER", "").isdigit() and os.environ.get("GITHUB_REPOSITORY")):
+        os.environ["HALO_BUILD_NUMBER"] = os.environ["GITHUB_RUN_NUMBER"]
+        os.environ["HALO_UPDATE_REPOSITORY"] = os.environ["GITHUB_REPOSITORY"]
+        os.environ["HALO_UPDATE_TAG"] = "mods-"
+        print(f"build number {os.environ['HALO_BUILD_NUMBER']} (updates from {os.environ['GITHUB_REPOSITORY']})",
+              flush=True)
     run(configure)
 
     if args.platform == "web":

@@ -11,6 +11,10 @@ def staged = new File(rootDir, "../../build/android")
 // none and never look for updates
 def buildNumberText = System.getenv("HALO_BUILD_NUMBER") ?: "0"
 def buildNumber = buildNumberText.isInteger() ? buildNumberText.toInteger() : 0
+// opence-mods: where the self-updater looks (tools/ci_build.py): the
+// repository's releases, and the prefix of their tags
+def updateRepository = System.getenv("HALO_UPDATE_REPOSITORY") ?: "OpenCommunityEdition/OpenCE"
+def updateTag = System.getenv("HALO_UPDATE_TAG") ?: "build-"
 
 // the workflow's signing key (.github/workflows/build.yml): every build of
 // main signed with it can install over the one before; without it, the
@@ -31,6 +35,8 @@ android {
         versionCode Math.max(1, buildNumber)
         versionName buildNumber > 0 ? "build " + buildNumber : "1.0"
         buildConfigField "int", "HALO_BUILD_NUMBER", "${buildNumber}"
+        buildConfigField "String", "HALO_UPDATE_REPOSITORY", "\"${updateRepository}\""
+        buildConfigField "String", "HALO_UPDATE_TAG", "\"${updateTag}\""
         ndk {
             abiFilters "arm64-v8a"
         }

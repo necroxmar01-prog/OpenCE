@@ -45,9 +45,16 @@ import java.util.zip.ZipInputStream;
  *
  * Every build of main is signed with the same key (the workflow's), which an
  * app must keep for Android to install a new version over it.
+ *
+ * opence-mods: a build of the fork's opence-mods branch looks in the fork's
+ * releases instead (BuildConfig.HALO_UPDATE_REPOSITORY, tags mods-number),
+ * whose asset is the APK itself, halo-mods.apk (the workflow's mods-release).
  */
 final class Updater {
-    private static final String REPOSITORY = "OpenCommunityEdition/OpenCE";
+    /** opence-mods: the fork's releases for its app (mods-number, its APK as is) */
+    private static final String REPOSITORY = BuildConfig.HALO_UPDATE_REPOSITORY;
+    private static final String TAG = BuildConfig.HALO_UPDATE_TAG;
+    private static final boolean MODS = TAG.equals("mods-");
     private static final String USER_AGENT = "halo-ce-universal-updater";
     private static final int TIMEOUT_MILLISECONDS = 20000;
     /** the most a download (a release's zip, about 35 MB) or the app in it may be */
@@ -186,7 +193,7 @@ final class Updater {
             try (InputStream stream = connection.getInputStream()) {
                 String tag = new JSONObject(new String(readAll(stream), StandardCharsets.UTF_8)).optString("tag_name");
 
-                return tag.startsWith("build-") ? Integer.parseInt(tag.substring(6)) : 0;
+                return tag.startsWith(TAG) ? Integer.parseInt(tag.substring(TAG.length())) : 0;
             } finally {
                 connection.disconnect();
             }
@@ -232,7 +239,7 @@ final class Updater {
     /* ---------- updating */
 
     private static void update(Activity activity, int latest) {
-        String asset = "halo-android-" + (BuildConfig.DEBUG ? "debug" : "release") + ".zip";
+        String asset = MODS ? "halo-mods.apk" : "halo-android-" + (BuildConfig.DEBUG ? "debug" : "release") + ".zip";
         File directory = new File(activity.getCacheDir(), UpdateProvider.DIRECTORY);
         LinearLayout layout = new LinearLayout(activity);
         TextView status = new TextView(activity);
@@ -258,14 +265,17 @@ final class Updater {
                 File zip = new File(directory, "update.zip");
                 File apk = new File(directory, UpdateProvider.APK);
 
-                download("https://github.com/" + REPOSITORY + "/releases/download/build-" + latest + "/" + asset, zip,
+                download("https://github.com/" + REPOSITORY + "/releases/download/" + TAG + latest + "/" + asset,
+                    MODS ? apk : zip,
                     (received, total) -> activity.runOnUiThread(() -> {
                         bar.setProgress(total > 0 ? (int) (received * 1000 / total) : 0);
                         status.setText("Downloading build " + latest + "... (" + (received >> 20) + " of "
                             + (total >> 20) + " MB)");
                     }));
-                extractApk(zip, apk);
-                zip.delete();
+                if (!MODS) {
+                    extractApk(zip, apk);
+                    zip.delete();
+                }
                 activity.runOnUiThread(() -> {
                     progress.dismiss();
                     install(activity);
