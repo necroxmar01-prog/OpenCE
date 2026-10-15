@@ -337,6 +337,50 @@ jobs:
           include-hidden-files: true
           retention-days: 3
 
+  mods-release:
+    # opence-mods (the fork's branch): the Android app (its APK) and the
+    # Linux build as a release, mods-<run number>, which anyone with the link
+    # downloads without signing in and which does not expire as an artifact
+    # does; the newest three are kept. The web build's browser tests do not
+    # hold it back.
+    needs: [linux, android]
+    if: ${{ github.ref == 'refs/heads/opence-mods' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: halo-android-release
+          path: artifacts/android
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: halo-linux-debug
+          path: artifacts/linux
+
+      - name: Publish
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          mkdir release
+          find artifacts/android -name '*.apk' -exec cp {} release/halo-mods.apk \;
+          (cd artifacts/linux && zip -qr "$GITHUB_WORKSPACE/release/halo-linux-armaduras.zip" .)
+          ls -l release
+          tag="mods-$GITHUB_RUN_NUMBER"
+          subject="$(printf '%s' "${MESSAGE:-manual run}" | head -n 1)"
+          printf '%s\n\nhalo-mods.apk: la app Halo (mods) para Android.\nhalo-linux-armaduras.zip: el juego con parches para Steam Deck y Linux.\n' \
+            "$subject" > notes.md
+          gh release create "$tag" release/* --target "$GITHUB_SHA" --latest \
+            --title "Mods $GITHUB_RUN_NUMBER (${GITHUB_SHA:0:7})" --notes-file notes.md
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("mods-"))] | sort_by(.createdAt) | reverse | .[3:] | .[].tagName' |
+            while read -r old; do gh release delete "$old" --cleanup-tag --yes; done
+
   release:
     # The eight builds (and the Windows builds' PDBs) as a release, tagged
     # build-<run number> and marked latest
