@@ -1,0 +1,51 @@
+name: Sync upstream
+
+# opence-mods: once a day, OpenCE's main (OpenCommunityEdition/OpenCE)
+# merged into this fork's opence-mods branch, and when it brought anything,
+# the Build workflow run on the branch, whose mods-release publishes the
+# Android app and the Linux build (and the Android app offers its players
+# the update). A merge that conflicts, or that changes the workflows (which
+# this workflow's token may not push), fails, and GitHub tells the
+# repository's owner by email: the branch is then merged by hand.
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: opence-mods
+          fetch-depth: 0
+
+      - name: Merge upstream main
+        id: merge
+        run: |
+          git config user.name "opence-mods sync"
+          git config user.email "opence-mods-sync@users.noreply.github.com"
+          git remote add upstream https://github.com/OpenCommunityEdition/OpenCE.git
+          git fetch upstream main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "nothing new upstream"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git merge --no-edit -m "Merge OpenCE's main into opence-mods" upstream/main
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push and build
+        if: steps.merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          git push origin HEAD:opence-mods
+          gh workflow run build.yml --ref opence-mods
