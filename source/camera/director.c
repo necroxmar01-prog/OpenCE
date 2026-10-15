@@ -681,7 +681,8 @@ static void director_choose_game_perspective(
 	{
 		if (following == TRUE)
 		{
-			if (force || director->camera_proc == (director_camera_update_proc)first_person_camera_update)
+			/* port: from over the shoulder too (a vehicle's seat kept it) */
+			if (force || director_on_foot_camera(director->camera_proc))
 			{
 				following_camera_new((struct following_camera *)director->camera_data);
 				director_set_camera(
