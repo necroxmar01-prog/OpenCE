@@ -50,11 +50,16 @@ a weapon is the game's.
 #include "weapon_mods.h"
 #include "network_addons.h"
 #include "../../third_party/zlib/zlib_prefixed.h"
+#include "bitmaps/bitmap_group.h"
+#include "rasterizer/rasterizer_swizzle.h"
 
 #include <xtl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* port_config.c's */
+long config_integer(char const *name);
 
 /* cache_files.c's (port): the loaded tags' table, which the menus replace too */
 void *cache_files_tag_instances(long *count);
@@ -242,6 +247,114 @@ static byte *addon_tags_file_read(
 	return bytes;
 }
 
+/* ---------- textures (Android and the web) */
+
+#if defined(HALO_ARM64_GUEST) || defined(HALO_WEB)
+
+enum
+{
+	/* bitmap_group.h's group type and bitmap_data's type and flag
+	(xbox_texture_cache.c's enums) */
+	_addon_tags_bitmap_group_2d_textures = 0,
+	_addon_tags_bitmap_type_2d = 0,
+	_addon_tags_bitmap_linear_bit = 4,
+	_addon_tags_bitmap_group_tag = 'bitm',
+};
+
+static boolean addon_tags_power_of_two(
+	long value)
+{
+	return value > 0 && !(value & (value - 1));
+}
+
+/* a 2D texture, swizzled (each level after the one before) with a level
+below its finest, made of its next level and those below it: its finest
+level's pixels skipped. Returns their size, 0 if it cannot be. */
+static long addon_tags_texture_drop_finest_level(
+	struct bitmap_data *bitmap)
+{
+	struct bitmap_data smaller;
+	long finest_size;
+
+	if (bitmap->type != _addon_tags_bitmap_type_2d || bitmap->depth != 1 || bitmap->mipmap_count < 1 ||
+		bitmap->pixels_size <= 0 || TEST_FLAG(bitmap->flags, _addon_tags_bitmap_linear_bit) ||
+		!addon_tags_power_of_two(bitmap->width) || !addon_tags_power_of_two(bitmap->height) ||
+		bitmap->width < 8 || bitmap->height < 8)
+	{
+		return 0;
+	}
+	smaller = *bitmap;
+	smaller.width /= 2;
+	smaller.height /= 2;
+	smaller.mipmap_count--;
+	/* (the levels' sizes, the whole padded to 128 bytes: the finest's, a
+	multiple of 128 at these sizes, is the difference) */
+	finest_size = rasterizer_xbox_bitmap_get_pixel_data_size(bitmap) -
+		rasterizer_xbox_bitmap_get_pixel_data_size(&smaller);
+	if (finest_size <= 0 || (finest_size & 127) || finest_size >= bitmap->pixels_size)
+		return 0;
+	smaller.pixels_offset += finest_size;
+	smaller.pixels_size -= finest_size;
+	*bitmap = smaller;
+	return finest_size;
+}
+
+/* the addon's 2D textures (the bitmap groups' of 2D textures, which models
+draw) with a side larger than largest made smaller, each by its finest
+levels skipped (its pixels then read from its next level on), until it fits
+or has no level left below it: the tags as the validator passed them, before
+addon_graft_relocate. A device whose texture cache cannot hold Halo PC
+mods' textures (Android's, halo_port_capacity.h) draws them so. Returns how
+many were made smaller, and the bytes of pixels they no longer read in
+bytes_saved. */
+static long addon_tags_reduce_textures(
+	struct addon_graft_header *header,
+	long largest,
+	long *bytes_saved)
+{
+	long index, reduced = 0, saved = 0;
+
+	if (largest <= 0)
+		largest = LONG_MAX;
+	for (index = 0; index < header->tag_count; index++)
+	{
+		struct addon_graft_instance *instance = &header->instances[index];
+		struct bitmap_group *group = instance->base_address;
+		long bitmap_index;
+
+		/* (models' textures alone: sprites and the HUD's and menus'
+		pictures are drawn at their bitmaps' sizes, and a HUD mod's meters
+		are 2D textures in its hud folders) */
+		if (instance->group_tag != _addon_tags_bitmap_group_tag || !group ||
+			group->type != _addon_tags_bitmap_group_2d_textures || !instance->name ||
+			strstr(instance->name, "hud") || strstr(instance->name, "interface"))
+		{
+			continue;
+		}
+		for (bitmap_index = 0; bitmap_index < group->bitmaps.count; bitmap_index++)
+		{
+			struct bitmap_data *bitmap = (struct bitmap_data *)group->bitmaps.address + bitmap_index;
+			boolean smaller = FALSE;
+
+			while (bitmap->width > largest || bitmap->height > largest)
+			{
+				long finest_size = addon_tags_texture_drop_finest_level(bitmap);
+
+				if (!finest_size)
+					break;
+				saved += finest_size;
+				smaller = TRUE;
+			}
+			if (smaller)
+				reduced++;
+		}
+	}
+	if (bytes_saved)
+		*bytes_saved = saved;
+	return reduced;
+}
+#endif
+
 /* ---------- public code */
 
 /* the addon read, checked by the validator where the level's tags go
@@ -298,6 +411,18 @@ static boolean addon_tags_read_addon_at(
 		error(_error_silent, "addon: %s: refused by the validator (debug.txt above)", name);
 		return FALSE;
 	}
+#if defined(HALO_ARM64_GUEST) || defined(HALO_WEB)
+	/* (Halo PC mods' textures, larger than the Xbox's, made to fit the
+	texture cache with the level's: display.mod_texture_size) */
+	{
+		long saved = 0;
+		long reduced = addon_tags_reduce_textures(tag_cache, config_integer("display.mod_texture_size"), &saved);
+
+		if (reduced)
+			error(_error_silent, "addon: %s: %ld textures drawn smaller, %ld KB less (display.mod_texture_size)",
+				name, reduced, saved >> 10);
+	}
+#endif
 
 	/* moved to memory of their own (the contiguous memory the game's
 	buffers are in, as the tag cache is) */

@@ -325,6 +325,13 @@ static const struct config_setting config_settings[] =
 	{ "display.first_person_legs", _config_boolean, "false", "HALO_FIRST_PERSON_LEGS", _environment_value, _platform_all,
 		"Your own legs in first person, seen looking down: your body as others\n"
 		"see it, drawn from the waist down, moving as it moves." },
+	{ "display.mod_texture_size", _config_integer, "512", "HALO_MOD_TEXTURE_SIZE", _environment_value,
+		_platform_android | _platform_web,
+		"The largest side, in pixels, that mods' (addons') model textures are\n"
+		"drawn at on this device: a larger one is drawn at its next smaller mipmap\n"
+		"that fits, so that the texture cache holds a level's textures and its mods'\n"
+		"(Halo PC mods' fill it: textures then flicker, vanish or are drawn as\n"
+		"others). 0 draws them whole (port/linux/game/addon_graft.c)." },
 	{ "display.camera", _config_string, "\"first_person\"", "HALO_CAMERA", _environment_value, _platform_all,
 		"The view on foot in a campaign: \"first_person\" (the game's own), or\n"
 		"over the shoulder, as in Resident Evil 6, \"shoulder_right\" or\n"
