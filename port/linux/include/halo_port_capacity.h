@@ -21,7 +21,8 @@ The Xbox game state is 0x345000 bytes at 0x80061000 and ends where the tag
 cache begins (0x803A6000). Cache files are linked to that tag cache address,
 so the game state cannot grow in place. The native builds put a 16 MB game
 state above the tag cache (which ends at 0x819A6000), inside the Xbox memory
-window (0x80000000-0xA0000000, Android's to 0x88000000:
+window (0x80000000-0xA0000000, Android's to 0x8C000000, the web build's
+to 0x88000000:
 port/linux/src/platform.h) and below everything the window hands out
 top-down (texture and sound caches, Direct3D resources).
 
@@ -44,13 +45,22 @@ is drawn as the default one ("YOU GOT STABBED" in debug.txt; Elite_Alpha_Siege
 did at 22 MB), and a frame of bigass_v3 draws more than 64 MB (DamnationCE's
 measurement). The desktop builds' cache is 256 MB, half their 512 MB memory
 window (port/linux/src/platform.h), whose pages are backed as they are used.
-Android's window is 128 MB, as the web build's, and its cache 36 MB: a
+The web build's window is 128 MB and its cache 36 MB (Android's were too,
+before the mods' builds gave it 192 MB and 68 MB, below): a
 campaign level with addons' armors and weapons (opence-mods), their textures
 made for Halo PC, drew more than the Xbox's 22 MB in a frame (two players in
 Halo 3 armors on c20: "YOU GOT STABBED", and the level drawn with others'
 textures); the level, its addons and the caches then take about 110 MB. */
 
-#if defined(HALO_ARM64_GUEST) || defined(HALO_WEB)
+#if defined(HALO_ARM64_GUEST)
+/* port (opence-mods): 68 MB in Android's 192 MB window. At 36 MB, the
+textures of c10 and an ODST, a Halo 3 HUD and three weapon mods, even at
+display.mod_texture_size, did not stay in it: some were never drawn (a
+wall seen as the fog's color). On c20 in co-op with the armor kits the 128
+MB window then had 13 MB free; the 64 MB more leave the rest of the 32 MB
+added to the cache to a larger level's geometry. */
+#define HALO_PORT_TEXTURE_CACHE_PAGE_COUNT 0x1100 /* (0x580) */
+#elif defined(HALO_WEB)
 #define HALO_PORT_TEXTURE_CACHE_PAGE_COUNT 0x900 /* (0x580) */
 #else
 #define HALO_PORT_TEXTURE_CACHE_PAGE_COUNT 0x4000 /* (0x580) */

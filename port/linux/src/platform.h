@@ -119,7 +119,12 @@ that window at start-up and hands out page-granular blocks from it, so the
 physical/virtual arithmetic the game and Direct3D rely on keeps working. */
 
 #define PLATFORM_CONTIGUOUS_BASE 0x80000000UL
-#if defined(HALO_ARM64_GUEST) || defined(HALO_WEB)
+#if defined(HALO_ARM64_GUEST)
+/* port (opence-mods): 192 MB on Android, the image linked above it
+(port/android/include/halo_android_abi.h), for the texture cache of mods'
+textures (halo_port_capacity.h) */
+#define PLATFORM_CONTIGUOUS_SIZE 0x0C000000UL
+#elif defined(HALO_WEB)
 /* 128 MB, a development kit's: Android's guest image is linked just above
 the window (port/android/include/halo_android_abi.h), and the web build's
 WebAssembly memory ends with it (tools/web_build.py) */

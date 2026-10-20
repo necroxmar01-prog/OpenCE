@@ -352,8 +352,10 @@ two ABIs use the same registers for 32-bit integers, floats and pointers.
 
 ### The fixed addresses
 
-The guest needs the Xbox memory at `0x80000000` to `0x88000000` and the
-image above it, to `0x8c000000`. The cache files contain pointers to these
+The guest needs the Xbox memory at `0x80000000` to `0x8c000000` (192 MB
+in the opence-mods builds, for the textures of mods; 128 MB, to
+`0x88000000`, in OpenCE's) and the image above it, to `0x90000000`. The
+cache files contain pointers to these
 addresses. The Java runtime of Android (ART) also reserves its spaces below
 4 GB. On some devices, for example handhelds with a large Java heap (the
 AYN Thor, the Retroid Pocket), ART's large object space covers
@@ -481,7 +483,7 @@ assembly of the port is necessary:
 
 - Bink video is not available. The game skips the movies.
 - The device must let the app reserve the fixed guest addresses, from
-  `0x80000000` to `0x8c000000`. If ART uses them, the app shows a message
+  `0x80000000` to `0x90000000`. If ART uses them, the app shows a message
   (refer to "The fixed addresses").
 - Touch operates the menus and skips cinematics. In the game, the touch
   controls appear when no controller is connected; their size follows the
