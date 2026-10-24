@@ -293,6 +293,48 @@ static short *node_chain_walk(
 	return link;
 }
 
+/* a tree whose links were corrected is logged whole, each node's links as
+the map had them and as they are now (its name the node's first field, in
+a model's and an animation graph's), for a map's broken skeletons to be
+compared with its models' */
+static void node_tree_log(
+	struct tag_validation *validation,
+	byte *nodes,
+	long node_count,
+	long node_size,
+	long sibling_offset,
+	long child_offset,
+	long parent_offset,
+	short original_links[][3])
+{
+	short node_index;
+
+	for (node_index = 0; node_index < node_count; node_index++)
+	{
+		if (original_links[node_index][0] != *node_link(nodes, node_size, node_index, parent_offset) ||
+			original_links[node_index][1] != *node_link(nodes, node_size, node_index, child_offset) ||
+			original_links[node_index][2] != *node_link(nodes, node_size, node_index, sibling_offset))
+		{
+			break;
+		}
+	}
+	if (node_index >= node_count)
+		return;
+
+	tag_validate_note(validation, "has %ld nodes (parent child sibling, the map's -> now):", node_count);
+	for (node_index = 0; node_index < node_count; node_index++)
+	{
+		tag_validate_note(validation, "node %d '%.31s': %d %d %d -> %d %d %d", node_index,
+			(char const *)(nodes + node_index * node_size),
+			original_links[node_index][0], original_links[node_index][1], original_links[node_index][2],
+			*node_link(nodes, node_size, node_index, parent_offset),
+			*node_link(nodes, node_size, node_index, child_offset),
+			*node_link(nodes, node_size, node_index, sibling_offset));
+	}
+
+	return;
+}
+
 /* the nodes (node_count of node_size bytes, no more than
 MAXIMUM_NODES_PER_MODEL) are a tree from node 0: the root has no sibling,
 every other node is reached once from it. A node the root does
@@ -314,6 +356,8 @@ static boolean node_tree_check(
 	short *link;
 	short node_index;
 
+	short original_links[MAXIMUM_NODES_PER_MODEL][3];
+
 	if (node_count <= 0)
 		return TRUE;
 	if (node_count > MAXIMUM_NODES_PER_MODEL ||
@@ -323,6 +367,12 @@ static boolean node_tree_check(
 		return FALSE;
 	}
 	memset(reached, 0, sizeof(reached));
+	for (node_index = 0; node_index < node_count; node_index++)
+	{
+		original_links[node_index][0] = *node_link(nodes, node_size, node_index, parent_offset);
+		original_links[node_index][1] = *node_link(nodes, node_size, node_index, child_offset);
+		original_links[node_index][2] = *node_link(nodes, node_size, node_index, sibling_offset);
+	}
 
 	/* (the root's parent is never read: an animation graph's is often 0) */
 	link = node_link(nodes, node_size, 0, sibling_offset);
@@ -358,6 +408,9 @@ static boolean node_tree_check(
 		reached[node_index] = TRUE;
 		queue[write_index++] = node_index;
 	}
+
+	node_tree_log(validation, nodes, node_count, node_size, sibling_offset, child_offset, parent_offset,
+		original_links);
 
 	return TRUE;
 }

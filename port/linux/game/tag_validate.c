@@ -1427,6 +1427,20 @@ void tag_validate_non_negative(
 	return;
 }
 
+void tag_validate_note(
+	struct tag_validation *validation,
+	char const *format,
+	...)
+{
+	va_list arguments;
+
+	va_start(arguments, format);
+	validation_message(validation, "notes", format, arguments);
+	va_end(arguments);
+
+	return;
+}
+
 void tag_validate_correct(
 	struct tag_validation *validation,
 	char const *format,

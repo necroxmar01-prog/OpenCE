@@ -341,6 +341,12 @@ void tag_validate_refuse(
 	struct tag_validation *validation,
 	char const *format,
 	...);
+/* something worth logging about the tag, not a correction (no limit on
+how many): what, printf style */
+void tag_validate_note(
+	struct tag_validation *validation,
+	char const *format,
+	...);
 /* a correction was made: what, printf style */
 void tag_validate_correct(
 	struct tag_validation *validation,

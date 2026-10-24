@@ -853,6 +853,10 @@ boolean custom_edition_models_convert(
 		{
 			return FALSE;
 		}
+		error(_error_silent, "custom edition: the model '%s' has %ld nodes, %ld geometries%s",
+			custom_edition_cache_tag_name(tag_cache, loaded_bytes, tag_index), model->nodes.count,
+			model->geometries.count,
+			TEST_FLAG(model->flags, _gbxmodel_parts_have_local_nodes_bit) ? ", parts of local nodes" : "");
 	}
 
 	globals->model_parts = malloc((totals.part_count + 1) * sizeof(*globals->model_parts));
