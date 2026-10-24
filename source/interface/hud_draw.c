@@ -83,6 +83,7 @@ symbols in this file:
 /* ---------- headers */
 
 #include "cseries/cseries.h"
+#include "passenger_camera.h" /* port: port/linux/game/passenger_camera.c */
 #include "cseries/errors.h"
 #include "math/real_math.h"
 #include "bitmaps/bitmaps.h"
@@ -1629,7 +1630,11 @@ static void hud_draw_bitmap_internal(
 		_shader_framebuffer_blend_function_alpha_multiply_add;
 	parameters.map[0] = (struct bitmap_data *)bitmap;
 
+	/* port: shared CE HUD sheets need meter channels only for this draw
+	(port/linux/src/xbox_textures.c), leaving their static artwork intact. */
+	halo_custom_edition_hud_meter(meter_parameters && custom_edition_cache_tags_loaded());
 	rasterizer_psuedo_dynamic_screen_quad_draw(&parameters, vertices);
+	halo_custom_edition_hud_meter(FALSE); /* port: end the CE meter draw scope */
 
 	match_assert_stack_frame("c:\\halo\\SOURCE\\interface\\hud_draw.c", 985);
 
@@ -1696,6 +1701,9 @@ static void hud_draw_bitmap_with_meter(
 			_hud_dont_scale_offset_bit),
 		0.0f,
 		&point);
+	/* port: the crosshairs_draw scope moves only the weapon's reticle */
+	if (is_crosshair_bitmap)
+		passenger_camera_reticle_offset(&point);
 	hud_calculate_bitmap_bounds(
 		bitmap,
 		absolute_placement->corner,
@@ -1982,6 +1990,11 @@ void hud_draw_meter(
 		meter_parameters.tint_color = real_alpha_intensity_to_pixel32(
 			PIN(meter->fade, 0.0f, 1.0f),
 			PIN(1.0f-meter->opacity, 0.0f, 1.0f));
+		/* port: PC meter shading does not multiply the emitted color by
+		the Xbox opacity tint. Keep this compatibility limited to the CE
+		maps identified as depending on Gearbox meters. */
+		if (custom_edition_cache_relies_on(_custom_edition_behaviour_gearbox_meters))
+			meter_parameters.tint_color |= 0x00FFFFFF;
 		meter_parameters.gradient = 1.0f;
 		meter_parameters.flash_color_is_negative = FALSE;
 		meter_parameters.tint_mode_2 = TRUE;

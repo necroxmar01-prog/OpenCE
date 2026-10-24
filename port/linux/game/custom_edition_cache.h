@@ -57,6 +57,9 @@ Custom Edition map is loaded. */
 boolean custom_edition_cache_stock_tag(
 	long tag_index);
 
+/* Borrowed until map unload; reads remain bounds checked by the source. */
+struct resource_map const *custom_edition_cache_bitmap_resources(void);
+
 /* When `header` (CACHE_FILE_HEADER_BYTES bytes, with `build` its build
 string field) is a Custom Edition cache header that reached the Xbox loader,
 logs why the file at `path` cannot run and returns TRUE: the map is refused,
@@ -158,6 +161,27 @@ struct cache_file_tag_header *custom_edition_cache_tags_load(
 (paths.custom_edition) */
 boolean custom_edition_install_present(
 	void);
+
+/* The locale resource map (loc.map) of the maps folders, which holds the
+text of the Custom Edition the maps come from, in its language: opened (FALSE
+if there is none, or it is not one) until custom_edition_locale_close. */
+boolean custom_edition_locale_open(
+	void);
+void custom_edition_locale_close(
+	void);
+/* The strings of its unicode string list tag `name` (as
+"ui\\shell\\main_menu\\..."): each string's UTF-16 characters, its
+terminator included, lengths[index] of them from strings[index]. One
+block, released with free(); NULL if it holds no such list, or one that
+does not fit in its tag. */
+struct custom_edition_string_list
+{
+	long count;
+	unsigned short const **strings;
+	long *lengths;
+};
+struct custom_edition_string_list *custom_edition_locale_strings(
+	char const *name);
 boolean custom_edition_cache_tags_loaded(
 	void);
 /* Whether the structure bsp reference (of the loaded map's scenario) names
@@ -200,7 +224,8 @@ FALSE after logging why it cannot. custom_edition_bitmaps_dispose forgets
 them either way. */
 boolean custom_edition_reordered_bitmaps_find(
 	byte *tag_cache,
-	unsigned long loaded_bytes);
+	unsigned long loaded_bytes,
+	unsigned long behaviours);
 /* As custom_edition_reordered_bitmaps_find, in the loaded map's tags, which
 the validator has checked: for the bitmaps of mods (mod_bitmaps.c), Halo
 PC's on any map. FALSE after logging why it cannot. */

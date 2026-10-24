@@ -46,10 +46,10 @@ machines, 16 players) are 0x226 and 0x434. */
 #define HALO_PORT_NETWORK_GAME_PLAYERS_END \
 	(HALO_PORT_NETWORK_GAME_PLAYERS_OFFSET + HALO_PORT_MAXIMUM_NETWORK_PLAYERS * HALO_PORT_NETWORK_PLAYER_SIZE)
 #define HALO_PORT_NETWORK_GAME_RANDOM_SEED_OFFSET (HALO_PORT_NETWORK_GAME_PLAYERS_END + 2)
-/* (then the gametype's PC options, struct game_variant_options: 0x1C bytes) */
+/* (then the gametype's PC options, struct game_variant_options: 0x2C bytes) */
 #define HALO_PORT_NETWORK_GAME_VARIANT_OPTIONS_OFFSET (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0xA)
-#define HALO_PORT_NETWORK_GAME_LOCAL_DATA_OFFSET (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x26)
-#define HALO_PORT_NETWORK_GAME_SIZE (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x2A)
+#define HALO_PORT_NETWORK_GAME_LOCAL_DATA_OFFSET (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x36)
+#define HALO_PORT_NETWORK_GAME_SIZE (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x3A)
 
 /* ---------- system link protocol
 
@@ -69,14 +69,15 @@ Raise it with any change to what the machines send each other. */
 /* port (opence-mods): the mods' builds send messages of their own (a co-op
 host's addons and each player's armor: port/linux/game/network_addons.c),
 and graft the host's addons as a level loads, which a build without them
-does not: their version is this bit and the upstream one (29, the low
+does not: their version is this bit and the upstream one (36, the low
 byte), so that neither joins the other's games, and the player is told why
 (network_client_manager.c); bits 8 to 11 are the mods' own revision of what
 they send (1: every player's camera; 2: 24 addons a set, several weapon
 mods of one addon: network_addons.c; 3: upstream's text chat, its
-messages 87 to 89, the mods' moved to 90 to 92) */
+messages 87 to 89, the mods' moved to 90 to 92; 4: upstream's aim assist
+and shield effects took 90 and 91, the mods' moved to 120 to 122) */
 #define HALO_PORT_NETWORK_VERSION_MODS 0x4000
-#define HALO_PORT_NETWORK_VERSION 17181 /* 29 | 3 << 8 | HALO_PORT_NETWORK_VERSION_MODS */
+#define HALO_PORT_NETWORK_VERSION 17444 /* 36 | 4 << 8 | HALO_PORT_NETWORK_VERSION_MODS */
 /* ... the advertisement's reserved bytes: the version (a little-endian word),
 then flags */
 #define HALO_PORT_ADVERTISED_VERSION_OFFSET 0
@@ -96,7 +97,7 @@ header included; the per-tick update of 128 players is 3,857 */
 update of 128 players decodes to 0x1010 bytes */
 #define HALO_PORT_NETWORK_PACKET_SIZE 0x1100
 
-/* the game settings record (HALO_PORT_NETWORK_GAME_SIZE, 13,120 bytes at 128
+/* the game settings record (HALO_PORT_NETWORK_GAME_SIZE, 13,136 bytes at 128
 machines and players) does not fit one message; it is sent in pieces of
 this many bytes (4 pieces), each 3,594 bytes on the wire */
 #define HALO_PORT_NETWORK_GAME_SETTINGS_FRAGMENT_SIZE 0xE00

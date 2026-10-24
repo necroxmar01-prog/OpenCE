@@ -133,13 +133,23 @@ enum
 	/* the host's text chat settings (network_chat.c): whether its players
 	may chat and send links, to every client, reliably */
 	_distributed_message_chat_config = 89,
+
+	/* the host's mouse aim assist policy (network_aim_assist.c), to every
+	client, reliably, when it is ready and when the policy changes */
+	_distributed_message_aim_assist_policy = 90,
+	/* the host's shield effects (network_shield_effects.c), to every client,
+	reliably, when it is ready and when they change */
+	_distributed_message_shield_effects = 91,
+
+	/* port (opence-mods): the mods' kinds from 120, past upstream's next
+	ones, so that a kind upstream adds takes no number of theirs */
 	/* network co-op's addons and armors (network_addons.c), in the lobby
 	too, reliably: the host's addons, one a message; a client's armor */
-	_distributed_message_addons = 90,
-	_distributed_message_armor_dress = 91,
+	_distributed_message_addons = 120,
+	_distributed_message_armor_dress = 121,
 	/* ... and every player's camera, the host's to the clients (over the
 	shoulder, shots go where its camera points: shoulder_camera.c) */
-	_distributed_message_player_cameras = 92,
+	_distributed_message_player_cameras = 122,
 
 	NUMBER_OF_DISTRIBUTED_MESSAGES
 };
@@ -250,6 +260,23 @@ real distributed_own_round_trip_ticks(void);
 back, as the host measures it) in milliseconds: 0 for the host's own
 players, NONE before it is known */
 long distributed_player_ping(short player_index);
+/* the latency meter (latency_meter.c): the round trips above timed in
+milliseconds by when this machine sent the tick they come back naming,
+nothing more sent; what is shown of them is refreshed twice a second in the
+tick (with Latency meter On), so the render reads it whole. (A client) its
+round trip to the host, NONE before it is known or on the host */
+long distributed_own_ping(void);
+/* a player's round trip as this machine times it: the host each client's
+(its own players' 0), a client its own players'; NONE for another's, or
+before it is known */
+long distributed_player_measured_ping(short player_index);
+/* (the host) its slowest client's, NONE for none */
+long distributed_slowest_client_ping(void);
+/* (a client) the host has sent nothing for two seconds */
+boolean distributed_connection_problem(void);
+/* (a client) the host has its players (or its vehicle) at that tick of this
+machine's, as told now: its own round trip timed */
+void distributed_note_own_round_trip(long time);
 /* (the host, in its tick) the client machine a player is on, NONE for none
 (the host's own players') */
 long distributed_player_machine(short player_index);

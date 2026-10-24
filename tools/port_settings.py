@@ -95,16 +95,29 @@ SCREENS = {
              [("OFF", "off"), ("FXAA", "fxaa"), ("MSAA 2X", "msaa2x"), ("MSAA 4X", "msaa4x")],
              "Smooth jagged edges, which the Xbox did not. FXAA\nis cheap; MSAA is sharper.",
              "android web", "anti_aliasing_android"),
+            ("TEXTURE FILTERING:", "display.anisotropic_filtering",
+             [("OFF", "0"), ("2X", "2"), ("4X", "4"), ("8X", "8"), ("16X", "16")],
+             "Keep floors and walls sharp at a grazing angle,\nwhich the Xbox did not. Off: as the Xbox.", None),
             ("SHADOW RESOLUTION:", "display.shadow_resolution",
              [("128", "128"), ("256", "256"), ("512", "512"), ("1024", "1024")],
              "The size objects' shadows are drawn at: 128 as on\nthe Xbox; larger for smoother, as soft, edges.",
              None),
             ("PER-PIXEL LIGHTING:", "display.per_pixel_lighting", ON_OFF,
              "Light models for each pixel, without the facets\nof the Xbox's lighting for each vertex.", None),
+            ("OVERSHIELD:", "display.overshield_effect", ON_OFF,
+             "The overshield rises up the body and stays lit,\nin its own color. Online: the host's choice.", None),
+            ("MODEL DETAIL:", "display.model_detail", [("STOCK", "stock"), ("NATIVE", "native"), ("HIGHEST", "highest")],
+             "Stock picks models' detail by the Xbox's 480 lines;\nnative by this display's; highest, always the best.", None),
             ("SHIELD GLOW:", "display.shield_glow", ON_OFF,
-             "Shields light their surroundings as they flare,\nin the shield's own color.", None),
+             "Shields light their surroundings as they flare.\nOnline: the host's choice.", None),
             ("GLOW INTENSITY:", "display.shield_glow_intensity", [("DEFAULT", "default"), ("LIGHT SHOW", "light_show")],
-             "Light Show: the shield glow three times as far,\nat full from a third of the flare.", None),
+             "Light Show: three times as far, at full from a\nthird of the flare. Online: the host's choice.", None),
+            ("MATCH TIMER:", "display.match_timer", ON_OFF,
+             "Draw a clock at the bottom right in multiplayer,\ncounting up from the start of the game.", None),
+            ("HDR:", "display.hdr", ON_OFF,
+             "Keep the light of explosions, plasma and the sun\npast white, and roll it off instead of clipping.", None),
+            ("HDR DISPLAY:", "display.hdr_output", ON_OFF,
+             "With HDR, on an HDR display, show that light\nbrighter than white. From the next start.", "desktop"),
         ],
     },
     "mouse_settings": {
@@ -193,7 +206,7 @@ SCREENS = {
              "Level the view while walking.", None),
             ("BUTTON LAYOUT:", "profile.button_preset",
              [("DEFAULT", "0"), ("SWAP TRIGGERS", "1"), ("SWAP A, L TRIGGER", "2"), ("SWAP B, L TRIGGER", "3"),
-              ("SWAP B, R STICK", "4")],
+              ("SWAP B, R STICK", "4"), ("BUMPER JUMPER", "5")],
              "Which of the controller's buttons does what (not\nthe keyboard's: Controls Setup sets those).", None),
             ("STICK LAYOUT:", "profile.joystick_preset",
              [("DEFAULT", "0"), ("SOUTHPAW", "1"), ("LEGACY", "2"), ("LEGACY SOUTHPAW", "3")],
@@ -208,18 +221,27 @@ SCREENS = {
 # pending edits, Defaults, OK and Cancel as the other settings screens.
 _video = SCREENS["video_settings"]
 _graphics = {"display.high_res_hud", "display.hud_button_style", "display.high_res_text", "display.anti_aliasing",
-             "display.shadow_resolution", "display.per_pixel_lighting",
-             "display.shield_glow", "display.shield_glow_intensity"}
+             "display.anisotropic_filtering", "display.shadow_resolution", "display.per_pixel_lighting", "display.match_timer",
+             "display.model_detail"}
+# (the visual modifiers: a screen of their own, Extra Effects)
+_extra_effects = {"display.shield_glow", "display.shield_glow_intensity",
+                  "display.overshield_effect", "display.hdr", "display.hdr_output"}
 SCREENS["video_settings/graphics"] = {
     "screen": "graphics_settings_screen", "header": _video["header"], "spacing": 30,
     "same_place": ["anti_aliasing_android"],
     "rows": [row for row in _video["rows"] if row[1] in _graphics],
 }
-_video["rows"] = [row for row in _video["rows"] if row[1] not in _graphics]
+SCREENS["video_settings/extra_effects"] = {
+    "screen": "extra_effects_settings_screen", "header": _video["header"], "spacing": 30,
+    "rows": [row for row in _video["rows"] if row[1] in _extra_effects],
+}
+_video["rows"] = [row for row in _video["rows"] if row[1] not in _graphics | _extra_effects]
 _video["categories"] = [
-    ("GRAPHICS:", "video_settings/graphics", "The HUD, text, anti-aliasing, shadows and\nlighting."),
+    ("GRAPHICS:", "video_settings/graphics", "The HUD, text, anti-aliasing, shadows,\nlighting and HDR."),
     ("FOV AND VIEWMODELS:", "video_settings/fov_viewmodels",
      "The field of view and the first-person\nweapon. Their defaults keep the stock view."),
+    ("EXTRA EFFECTS:", "video_settings/extra_effects",
+     "Visual modifiers the stock game does not\nhave, such as the shield glow."),
 ]
 SCREENS["video_settings/fov_viewmodels"] = {
     "screen": "fov_viewmodel_settings_screen", "header": _video["header"], "spacing": 30,
@@ -230,6 +252,8 @@ SCREENS["video_settings/fov_viewmodels"] = {
          "The weapon and hands, horizontal at 16:9.\nDefault keeps the weapon's stock view.", None),
         ("VIEWMODELS:", "display.viewmodel_visible", ON_OFF,
          "Draw first-person weapons, hands and attached\nvisuals. Gameplay and sound continue when off.", None),
+        ("PASSENGER THIRD PERSON:", "display.passenger_third_person", ON_OFF,
+         "Third-person Warthog and Scorpion passengers in\nthe campaign and co-op. Weapon zoom is disabled.", None),
         ("ARM SHIELDS:", "display.viewmodel_shield", ON_OFF,
          "The energy shield's flare on your first-person\narms too, as on your body.", None),
         ("CAMERA:", "display.camera",
@@ -735,12 +759,83 @@ MT = "main_menu/multiplayer_type_select"
 # and their helps after the five of its own (its helps are the rows' values'
 # in turn: menu_functions.c's gametype_option_help)
 SLAYER_EDIT = "main_menu/settings_select/multiplayer_setup/playlist_edit/slayer_edit"
+PLAYER_EDIT = "main_menu/settings_select/multiplayer_setup/player_options_edit"
+# (its rows, the PC version's, in order: ce_menus.py moves them 27 apart)
+PLAYER_OPTIONS_ROWS = ['number_of_lives', 'maximum_health', 'shields', 'respawn_time', 'respawn_time_growth', 'odd_man_out', 'invisible_players', 'suicide_penalty']
+# the vehicle sets' PC set (game_engine.h's VARIANT_VEHICLE_SET_PC), between
+# GUN TURRETS and CUSTOM (menu_functions.c's VEHICLE_PRESET_PC), and its help
+# among the sets' (its rows' values' in turn: gametype_option_help)
+VEHICLE_EDIT = "main_menu/settings_select/multiplayer_setup/vehicle_options_edit"
+AIM_ASSIST_HELP = [
+    "Players keep their current mouse aim assist setting.",
+    "Disable mouse aim assist for mouse/keyboard players.\\nController and touch aim assist are unchanged.",
+]
+# the host's shield effects, for every player of a network game
+# (network_shield_effects.c): their words, then their helps
+SHIELD_EFFECTS = ['STOCK', 'GLOW', 'LIGHT SHOW', 'OVERSHIELD', 'GLOW+OVERSHIELD', 'SHOW+OVERSHIELD']
+SHIELD_EFFECTS_HELP = [
+    "Everyone sees the stock game's shields and\\novershield, whatever their own settings.",
+    "Everyone's shields light their surroundings as\\nthey flare.",
+    "Everyone's shields light their surroundings as\\nthey flare, three times as far (Light Show).",
+    "For everyone, the overshield rises up the body\\nand stays lit, in its own color.",
+    "For everyone, shields light their surroundings,\\nand the overshield rises and stays lit.",
+    "For everyone, Light Show's shield glow, and the\\novershield rising and staying lit.",
+]
+
+# OpenCE's gametypes' options (port/linux/game/game_modes.c), a screen of the
+# gametype editor's (menu_functions.c's "mp profile init opence options"): the
+# mode and Hardcore, then the mode's own rows, which menu_functions.c's
+# gametype_option_help shows (op_inf_ for Infection, op_gg_ for Gun Game)
+# below them; a row's values are menu_functions.c's gametype_options'
+PLAYLIST_EDIT = "main_menu/settings_select/multiplayer_setup/playlist_edit"
+OPENCE_EDIT = "main_menu/settings_select/multiplayer_setup/opence_options_edit"
+OPENCE_ROWS = [
+    ("oce_mode", "MODE:", ["NONE", "SWAT", "INFECTION", "GUN GAME"], [
+        "The game type's own rules.",
+        "No shields, and a shot to the head kills. Slayer only.",
+        "Humans killed join the zombies, who win when\\nno human is left. Team Slayer only.",
+        "Each kill gives the next weapon; a kill with the\\nlast wins. Free for all Slayer only."]),
+    ("oce_hardcore", "HARDCORE:", ["OFF", "ON"], [
+        "The motion sensor and aim assist as the game\\ntype has them.",
+        "No motion sensor, no aim assist, and a kill\\nrestores the killer's health and shields."]),
+    ("inf_zombies", "FIRST ZOMBIES:", ["1", "2", "3", "4", "8", "16"],
+     ["The zombies chosen when the round starts\\n(a human is always left)."] * 6),
+    ("inf_speed", "ZOMBIE SPEED:", ["100%", "110%", "125%", "150%", "175%", "200%"],
+     ["How fast zombies move, of a human's speed."] * 6),
+    ("inf_damage", "SKULL DAMAGE:", ["100%", "150%", "200%", "250%"],
+     ["The damage of a zombie's skull's melee."] * 4),
+    ("inf_respawn", "ZOMBIE RESPAWN:", ["1 SECOND", "3 SECONDS", "5 SECONDS", "10 SECONDS", "15 SECONDS",
+                                        "30 SECONDS"],
+     ["How long a dead zombie waits to respawn."] * 6),
+    ("inf_countdown", "COUNTDOWN:", ["NONE", "5 SECONDS", "10 SECONDS", "15 SECONDS", "30 SECONDS"],
+     ["How long the round waits, once two players are\\nalive, before the first zombies are chosen."] * 5),
+    ("inf_shields", "ZOMBIE SHIELDS:", ["OFF", "ON"],
+     ["Zombies have no shields.", "Zombies have shields, as humans do."]),
+    ("gg_order", "WEAPON ORDER:", ["STRONGEST FIRST", "WEAKEST FIRST", "RANDOM"], [
+        "From the rocket launcher to the pistol.", "From the pistol to the rocket launcher.",
+        "In an order the host draws for each game."]),
+    ("gg_melee", "MELEE DEMOTES:", ["OFF", "ON"], [
+        "A melee kill takes nothing from the victim.",
+        "A melee kill takes the victim back a weapon."]),
+]
+OPENCE_ITEM = f"{PLAYLIST_EDIT}/playlist_edit_opence_item"
+
 STRING_INSERTS = {
+    # (the gametype editor's OPENCE OPTIONS' words, after the PC version's:
+    # menu_functions.c's playlist_edit_description)
+    f"{PLAYLIST_EDIT}/playlist_edit_list_extended_dsc_text": [(8, [
+        "Choose the rules of OpenCE's\\ngametypes: SWAT, Infection,\\nGun Game and Hardcore.\\nThis gametype:"])],
+    f"{PLAYER_EDIT}/player_options_labels": [(8, ["AIM ASSIST:", "SHIELD EFFECTS:"])],
+    f"{PLAYER_EDIT}/cap_player_options": [(28, AIM_ASSIST_HELP + SHIELD_EFFECTS_HELP)],
     # (Teamplay Options' voice chat and vote kick rows, after its own:
     # TEAMPLAY_ROWS)
     f"{TEAMPLAY_EDIT}/teamplay_options_labels": [(3, [label for _, label, *_ in TEAMPLAY_ROWS])],
     f"{TEAMPLAY_EDIT}/cap_teamplay_options": [(10, [text for *_, helps in TEAMPLAY_ROWS for text in helps])],
     f"{SLAYER_EDIT}/var_kills_to_win": [(5, ["75", "100", "150", "200", "250", "500"])],
+    f"{VEHICLE_EDIT}/var_vehicle_set": [(8, ["PC"])],
+    f"{VEHICLE_EDIT}/cap_vehicle_options": [(17, [
+        "Every vehicle the map places will spawn, as in\\nHalo PC.",
+    ])],
     f"{SLAYER_EDIT}/cap_slayer": [(11, [
         "Seventy-five kills to win. Settle in for a long\\nfight.",
         "A hundred kills to win. Made for big games.",
@@ -777,7 +872,8 @@ STRING_OVERRIDES.update({
         "Play the campaign with a\\nfriend in split screen:\\nplayer 2 on a gamepad.",
         "Set all the attributes for your \\nmultiplayer gametypes and\\nkeep them for future use.",
     ],
-    "main_menu/gametype_select/var_gametype_banks": ["STANDARD", "CUSTOM"],
+    # (and the port's OPENCE: OpenCE's gametypes, port/linux/game/game_modes.c)
+    "main_menu/gametype_select/var_gametype_banks": ["STANDARD", "OPENCE", "CUSTOM"],
     # (the PC's weapon sets, then the Xbox's NO GRENADES: menu_functions.c's
     # gametype_options maps them to the engine's)
     "main_menu/settings_select/multiplayer_setup/item_options_edit/item_options_labels": ["INFINITE GRENADES:", "WEAPON SET:", "VEHICLE SET:", "STARTING EQUIPMENT:",
@@ -816,6 +912,24 @@ STRING_OVERRIDES.update({
         "SHORT RANGE", "HUMAN", "COVENANT", "CLASSIC", "HEAVY WEAPONS", "NO GRENADES"],
 })
 
+# which of STRING_OVERRIDES' strings say what one of the PC version's own
+# says: its index in the PC version's list, or None (the port's own). A map
+# in another language than English has those in its language (map=,
+# menu_tags.c's map_strings); the inserted strings (STRING_INSERTS) are the
+# port's own, the rest of their lists the PC version's
+OVERRIDE_ORIGINALS = {
+    f"{PE}/profile_edit_descriptions": [0, None, None, None, None, None, None, 7, None],
+    f"{MT}/multiplayer_options": [0, 1, 2, 3, None, 5, None, None],
+    f"{MT}/multiplayer_option_descriptions": [0, 1, None, None, 4, None, 5],
+    "main_menu/gametype_select/var_gametype_banks": [0, None, 2],
+    "main_menu/settings_select/multiplayer_setup/item_options_edit/item_options_labels": [0, 1, 2, 3, 4] + [None] * 4,
+    # (the first's note that infinite grenades work only with 4 players or
+    # fewer is left out: not so here)
+    "main_menu/settings_select/multiplayer_setup/item_options_edit/cap_item_options":
+        [None] + list(range(1, 15)) + [None, 15, 16] + [None] * 24,
+    "main_menu/settings_select/multiplayer_setup/item_options_edit/var_weapon_set": list(range(13)) + [None],
+}
+
 # the map lists' first row: SINGLEPLAYER, MULTIPLAYER, CUSTOM SINGLEPLAYER or
 # CUSTOM MULTIPLAYER maps (_map_kind)
 MAP_KIND_CHOOSER = "main_menu/new_select/list_item_0_map_kind"
@@ -831,6 +945,17 @@ WIDGET_PATCHES = {
     # (the main menu's MODS, before Quit: _mods)
     "main_menu/main_menu_select_list": {"insert_before": {"main_menu/main_menu_item_quit_game": [
         f'<child widget="main_menu/main_menu_item_mods" x="{MODS_ITEM_PLACE[0]}" y="{MODS_ITEM_PLACE[1]}"/>']}},
+    f"{PLAYER_EDIT}/player_options_menu": {"insert_before": {
+        f"{PLAYER_EDIT}/player_button_bar": [
+            f'<child widget="{PLAYER_EDIT}/op_aim_assist" x="54" y="289"/>',
+            f'<child widget="{PLAYER_EDIT}/op_shield_effects" x="54" y="316"/>']}},
+    # (its rows 27 apart, not 30, so that ten fit above the help, which keeps
+    # the three lines some have: ce_menus.py's CHILD_OFFSETS)
+    f"{PLAYER_EDIT}/player_options_help": {"set": {"top": 345, "height": 60}},
+    # (the gametype editor's OPENCE OPTIONS, after its own rows: _opence_options)
+    f"{PLAYLIST_EDIT}/edit_playlist_select_list": {
+        "insert_before": {f"{PLAYLIST_EDIT}/playlist_edit_button_bar": [f'<child widget="{OPENCE_ITEM}"/>']},
+        "inputs": ["port playlist edit desc"]},
     # (the profile settings' picture: on Gamepad Setup's row, the profile's
     # button settings, BITMAP_FRAMES; menu_functions.c's
     # profile_gamepad_layout)
@@ -972,10 +1097,12 @@ def title_backdrop(width: float) -> str:
 # hold each number of buttons, one frame each (the Xbox's 2-button box is
 # 159 units high, and each button 35 more)
 PAUSE_BOX_BUTTONS = [3, 4]
-# the campaign pause box, tall enough for five rows at the PC version's pause
-# menu's pitch (30) with the prompts still under the last row: the stock box
-# is 159, and those rows need 36 more
-PAUSE_BOX_EXTRA_HEIGHTS = [195]
+# the campaign pause box, tall enough for five rows (SETTINGS added) or six
+# (network co-op's FRIENDLY FIRE too) at the PC version's pause menu's pitch
+# (30) with the prompts still under the last row: the stock box is 159, and
+# those rows need 36 and 66 more (menu_tags.c's pause_campaign_patch); the
+# mission objectives' box beside it grows with it
+PAUSE_BOX_EXTRA_HEIGHTS = [195, 225]
 
 
 def pause_box_height(buttons: int) -> int:
@@ -1289,19 +1416,35 @@ COOP_SETUP_SCREENS = [
             "Damage from the other players will only reduce\\nshields. Health will be unaffected.",
             "Players can be hurt by damage from explosives\\nfired by the other players.",
         ]),
-        ("coop_extra_enemies", "EXTRA ENEMIES:", ["NONE", "PER PLAYER", "STATIC MULTIPLIER"], [
+        ("coop_extra_enemies", "EXTRA ENEMIES:", ["PER PLAYER", "STATIC MULTIPLIER", "NONE"], [
+            "Enemy squads grow with the players: by the value of\\n'Per Player' for each player past the first.",
+            "Enemy squads use 'Multiplier', however many players\\nthere are.",
             "Enemy squads are as the campaign has them.",
-            "Enemy squads grow with the players: by the amount\\nbelow for each player past the first.",
-            "Enemy squads are the amount below times as large,\\nhowever many players there are.",
         ]),
-        ("coop_enemies_per_player", "PER PLAYER:", [f"{value}%" for value in COOP_ENEMIES_PERCENTAGES],
-         ["For each player past the first, enemy squads get\\nthis much more of themselves (100%: as many again)."] *
-         len(COOP_ENEMIES_PERCENTAGES)),
+        ("coop_extra_pickups", "EXTRA PICKUPS:", ["PER PLAYER", "STATIC MULTIPLIER", "NONE"], [
+            "Pickups grow with the players: by the value of\\n'Per Player' for each player past the first.",
+            "Pickups use 'Multiplier', up to eight times as many,\\nhowever many players there are.",
+            "Pickups are as the campaign has them.",
+        ]),
+        ("coop_extra_vehicles", "EXTRA VEHICLES:", ["PER PLAYER", "STATIC MULTIPLIER", "NONE"], [
+            "Vehicles respawn after being driven a short distance\\nbased on the number of players: by two thirds the value of\\n'Per Player' for each player past the first.",
+            "Vehicles respawn after being driven a short distance,\\nwith extra copies equal to ('Multiplier' - 1) * 2/3,\\nrounded down, however many players there are.",
+            "Vehicles are as the campaign has them.",
+        ]),
         ("coop_enemies_multiplier", "MULTIPLIER:", [f"{value}X" for value in COOP_ENEMIES_MULTIPLIERS],
-         ["Each enemy squad is this many times as large."] * len(COOP_ENEMIES_MULTIPLIERS)),
+         ["Static amounts for the options set to this mode.\\nPickups are capped at eight times as many."] * len(COOP_ENEMIES_MULTIPLIERS)),
+        ("coop_enemies_per_player", "PER PLAYER:", [f"{value}%" for value in COOP_ENEMIES_PERCENTAGES],
+         ["For each player past the first, options set to Per\\nPlayer get this much more (100%: as many again)."] *
+         len(COOP_ENEMIES_PERCENTAGES)),
         ("coop_player_collisions", "PLAYER COLLISIONS:", ["ON", "OFF"], [
             "Players bump into each other, as in the campaign.",
             "Players walk through each other, so that no one\\nblocks a doorway. The AI's characters still block.",
+        ]),
+        # (network.coop_ally_friendly_fire: game_engine.c's
+        # game_engine_friendly_damage)
+        ("coop_ally_friendly_fire", "ALLY FRIENDLY FIRE:", ["ON", "OFF"], [
+            "Players can hurt and kill their AI allies, as in\\nthe campaign.",
+            "Players can not hurt their AI allies, so that no\\none can kill Keyes or the Marines a level needs.",
         ]),
     ]),
     ("voice_options", "VOICE AND VOTING", "Voice chat, text chat and votes to kick a player,\\nfor this game.",
@@ -1329,7 +1472,7 @@ TITLES.update({f"{MT}/server_settings/{key}/header_{key}": title
                for key, title, _, _ in [*COOP_SETUP_SCREENS, MAP_SHARE_SETUP]})
 # (the rows of a co-op options screen in one place, the one shown: PER
 # PLAYER's and MULTIPLIER's, by EXTRA ENEMIES')
-SETUP_OPTION_SAME_PLACE = {"coop_enemies_multiplier"}
+SETUP_OPTION_SAME_PLACE = set()
 
 
 def _setup_option_screen(base: str, key: str, rows: list) -> list:
@@ -1641,6 +1784,52 @@ def _item_options_extras() -> list:
     return lines
 
 
+def _player_options_extras() -> list:
+    """The host's aim-assist policy and shield effects, hidden while editing
+    saved gametypes."""
+    base = PLAYER_EDIT
+    lines = []
+    for key, label_index, words in (("aim_assist", 8, ["ALLOWED", "BLOCK M+KB"]),
+                                    ("shield_effects", 9, SHIELD_EFFECTS)):
+        lines += _widget(f"{base}/op_{key}", [("width", 512), ("height", 28),
+            ("flags", "pass_unhandled_to_focused_child"), ("bitmap", "bitmaps/option_bkds"),
+            ("color", "#FF2896FF")], [f'<child widget="{base}/{key}_label"/>',
+            f'<child widget="{base}/{key}_spinner" x="286" y="1"/>'])
+        lines += _widget(f"{base}/{key}_label", [("type", "text"), ("controller", 1),
+            ("width", 280), ("height", 22), ("string_list", f"{base}/player_options_labels"),
+            ("string_index", label_index), ("font", "ui\\large_ui"), ("color", "#FF2896FF"),
+            ("text_x", 13), ("text_y", 4)], [])
+        lines += _widget(f"{base}/{key}_spinner", [("type", "spinner"), ("top", 2),
+            ("width", 206), ("height", 20), ("flags", "pass_unhandled_to_focused_child left_right_tabs_items"),
+            ("string_list", f"{base}/var_{key}"), ("font", "ui\\large_ui"),
+            ("color", "#FF2896FF"), ("align", "center"), ("text_y", 4),
+            ("list_flags", "items_from_strings"), ("header_bitmap", "bitmaps/arrow_sm_left"),
+            ("footer_bitmap", "bitmaps/arrow_sm_right"), ("header_bounds", "7 -13 19 -7"),
+            ("footer_bounds", "7 208 19 214")], ['<on event="left_mouse" run="mouse spinner 1wide click"/>'])
+    return lines + _strings(f"{base}/var_aim_assist", ["ALLOWED", "BLOCK M+KB"]) + \
+        _strings(f"{base}/var_shield_effects", SHIELD_EFFECTS)
+
+
+def _opence_options() -> list:
+    """the gametype editor's OPENCE OPTIONS: its row, after the editor's own
+    (as they are laid out), and its screen, as the gametype's options' are
+    (_setup_option_screen), its spinners the gametype's (menu_functions.c's
+    gametype_options), its header its words (no picture of its own)"""
+    lines = _setup_option_screen(OPENCE_EDIT, "opence", OPENCE_ROWS)
+    lines = [line.replace("port setup options init", "mp profile init opence options")
+             .replace("port setup options save", "mp profile set opence options")
+             .replace(f'bitmap="{OPENCE_EDIT}/header_opence"',
+                      'type="text" text="OPENCE OPTIONS" font="ui\\large_ui" color="#FFFFFFFF" text_x="13" text_y="16"')
+             for line in lines]
+    lines += _widget(OPENCE_ITEM, [("type", "text"), ("left", 51), ("top", 309), ("width", 232), ("height", 32),
+                                   ("bitmap", "bitmaps/list_item_bkd"), ("text", "OPENCE OPTIONS"),
+                                   ("font", "ui\\large_ui"), ("color", "#FF2896FF"), ("text_x", 13), ("text_y", 5)],
+                     [f'<on event="a" open="{OPENCE_EDIT}/opence_screen"/>',
+                      f'<on event="start" open="{OPENCE_EDIT}/opence_screen"/>',
+                      '<on event="left_mouse" run="mouse emit accept event"/>'])
+    return lines
+
+
 def _teamplay_options_extras() -> list:
     """Teamplay Options' rows of the port's: the host's voice chat
     (port/linux/game/network_voice.c) and vote kicks (network_votekick.c),
@@ -1707,7 +1896,9 @@ def multiplayer_files() -> dict:
         f"{MT}/coop".replace("/", ".") + ".xml": head + _coop() + ["</menus>", ""],
         "main_menu/new_select".replace("/", ".") + ".port.xml": head + _map_kind() + ["</menus>", ""],
         "main_menu/settings_select/multiplayer_setup/item_options_edit".replace("/", ".") + ".port.xml": head + _item_options_extras() + ["</menus>", ""],
+        PLAYER_EDIT.replace("/", ".") + ".port.xml": head + _player_options_extras() + ["</menus>", ""],
         TEAMPLAY_EDIT.replace("/", ".") + ".port.xml": head + _teamplay_options_extras() + ["</menus>", ""],
+        OPENCE_EDIT.replace("/", ".") + ".port.xml": head + _opence_options() + ["</menus>", ""],
         MODS.replace("/", ".") + ".xml": [head[0], "<!-- The port's Mods screen, in the PC version's style "
                                           "(tools/port_settings.py) -->", head[2]] + _mods() + ["</menus>", ""],
     }

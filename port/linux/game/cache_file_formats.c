@@ -14,11 +14,11 @@ Sources for the layouts, cited per structure below:
 - BlamLib, in the same archive: the font and unicode string list layouts.
 - Reclaimer (GPL-3.0, Gravemind2401; the Reclaimer-master archive): how
   bitmap tags and pixel data are found in bitmaps.map.
-No code from either project is used: they are documentation here, and this
-repository is CC0. Facts that neither source states were established by
-reading the sample Custom Edition maps; the comments below say so where they
-are used ("observed", "every map examined"), and
-docs/custom_edition_caches.md lists each with its evidence.
+No code from either project is used: they are documentation here. Facts
+that neither source states were established by reading the sample Custom
+Edition maps; the comments below say so where they are used ("observed",
+"every map examined"), and docs/custom_edition_caches.md lists each with its
+evidence.
 */
 
 /* ---------- headers */
@@ -3572,6 +3572,8 @@ static struct custom_edition_behaviour_map
 } const custom_edition_behaviour_maps[] =
 {
 #include "custom_edition_behaviours.inc"
+	/* Locally verified HUD data; not part of Chimera's generated list. */
+	{ "bigass_open_v1.1", 0xD2BC19F7, BEHAVIOUR(hud_number_scale) | BEHAVIOUR(xbox_ammo_meter_channels) },
 };
 
 #undef BEHAVIOUR
@@ -3590,6 +3592,7 @@ static char const *const custom_edition_behaviour_names[NUMBER_OF_CUSTOM_EDITION
 	"old_widescreen_fix",
 	"gearbox_shader_environment_types",
 	"block_multitexture_overlays",
+	"xbox_ammo_meter_channels",
 };
 
 /* the behaviours the map named `map_name` relies on, found as Chimera finds
