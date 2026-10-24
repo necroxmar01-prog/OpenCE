@@ -27,6 +27,7 @@ Edition vertices (docs/custom_edition_caches.md).
 #include "errors.h"
 #include "tag_files/tag_groups.h"
 #include "models/model_definitions.h"
+#include "models/models.h"
 #include "rasterizer/rasterizer.h"
 #include "rasterizer/rasterizer_geometry.h"
 #include "rasterizer/rasterizer_model_types.h"
@@ -809,6 +810,117 @@ static boolean structure_material_convert(
 	return success;
 }
 
+/* whether `matrix` is the identity, within what a map's floats keep */
+static boolean matrix_near_identity(
+	real_matrix4x3 const *matrix)
+{
+	real const tolerance = 0.01f;
+
+	return fabsf(matrix->scale - 1.0f) < tolerance &&
+		fabsf(matrix->forward.i - 1.0f) < tolerance && fabsf(matrix->forward.j) < tolerance && fabsf(matrix->forward.k) < tolerance &&
+		fabsf(matrix->left.i) < tolerance && fabsf(matrix->left.j - 1.0f) < tolerance && fabsf(matrix->left.k) < tolerance &&
+		fabsf(matrix->up.i) < tolerance && fabsf(matrix->up.j) < tolerance && fabsf(matrix->up.k - 1.0f) < tolerance &&
+		fabsf(matrix->position.x) < tolerance && fabsf(matrix->position.y) < tolerance && fabsf(matrix->position.z) < tolerance;
+}
+
+/* The nodes of `model` whose default inverse matrix (what a vertex is
+skinned by: models.c, the node's matrix times it) is not the inverse of its
+default pose (its default translations and rotations down the model's
+tree), into `wrong` when not NULL: their count. A drawn node of a wrong
+one takes its vertices out to wherever that matrix puts them (Takeback, a
+protected map: characters drawn as huge triangles out to the distance;
+Halo PC remakes them at load, the Xbox game draws with the map's). */
+static long model_default_inverses_wrong(
+	struct model const *model,
+	boolean *wrong)
+{
+	real_matrix4x3 defaults[MAXIMUM_NODES_PER_MODEL];
+	long node_count = model->nodes.count;
+	long wrong_count = 0;
+	long node_index;
+
+	if (node_count <= 0 || node_count > MAXIMUM_NODES_PER_MODEL)
+		return 0;
+	model_get_node_matrices(model, defaults, NULL, NULL, NULL);
+	for (node_index = 0; node_index < node_count; node_index++)
+	{
+		struct model_node const *node = TAG_BLOCK_GET_ELEMENT(&model->nodes, node_index, struct model_node);
+		real_matrix4x3 product;
+		boolean node_wrong;
+
+		matrix4x3_multiply(&defaults[node_index], &node->runtime_default_inverse_matrix, &product);
+		node_wrong = !matrix_near_identity(&product);
+		if (wrong)
+			wrong[node_index] = node_wrong;
+		if (node_wrong)
+			wrong_count++;
+	}
+
+	return wrong_count;
+}
+
+/* Every model's wrong default inverse matrices are remade from its default
+pose, as Halo PC does. If most of the map's nodes are wrong, the map keeps
+another convention than this check's, and none is changed (logged). */
+static void custom_edition_models_default_inverses_remake(
+	byte *tag_cache,
+	unsigned long loaded_bytes)
+{
+	struct model *model;
+	int32_t tag_index = NONE;
+	long node_total = 0;
+	long wrong_total = 0;
+	long model_wrong_count = 0;
+
+	while ((model = custom_edition_cache_tag_next(tag_cache, loaded_bytes, GBXMODEL_GROUP_TAG, sizeof(*model), &tag_index)) != NULL)
+	{
+		long wrong_count = model_default_inverses_wrong(model, NULL);
+
+		if (model->nodes.count > 0 && model->nodes.count <= MAXIMUM_NODES_PER_MODEL)
+			node_total += model->nodes.count;
+		wrong_total += wrong_count;
+		if (wrong_count)
+			model_wrong_count++;
+	}
+	if (!wrong_total)
+		return;
+	if (wrong_total * 2 > node_total)
+	{
+		error(_error_silent,
+			"custom edition: %ld of the models' %ld nodes have a default inverse matrix not their default pose's; most, so none is remade",
+			wrong_total, node_total);
+		return;
+	}
+
+	tag_index = NONE;
+	while ((model = custom_edition_cache_tag_next(tag_cache, loaded_bytes, GBXMODEL_GROUP_TAG, sizeof(*model), &tag_index)) != NULL)
+	{
+		boolean wrong[MAXIMUM_NODES_PER_MODEL];
+		real_matrix4x3 defaults[MAXIMUM_NODES_PER_MODEL];
+		long wrong_count = model_default_inverses_wrong(model, wrong);
+		long node_index;
+
+		if (!wrong_count)
+			continue;
+		model_get_node_matrices(model, defaults, NULL, NULL, NULL);
+		for (node_index = 0; node_index < model->nodes.count; node_index++)
+		{
+			if (wrong[node_index])
+			{
+				struct model_node *node = TAG_BLOCK_GET_ELEMENT(&model->nodes, node_index, struct model_node);
+
+				matrix4x3_inverse(&defaults[node_index], &node->runtime_default_inverse_matrix);
+			}
+		}
+		error(_error_silent, "custom edition: the model '%s' had %ld of its %ld nodes' default inverse matrices wrong: remade",
+			custom_edition_cache_tag_name(tag_cache, loaded_bytes, tag_index), wrong_count, model->nodes.count);
+	}
+	error(_error_silent, "custom edition: %ld default inverse matrices of %ld models remade (of %ld nodes)",
+		wrong_total, model_wrong_count, node_total);
+
+	return;
+}
+
 /* ---------- public code */
 
 boolean custom_edition_models_convert(
@@ -840,6 +952,7 @@ boolean custom_edition_models_convert(
 				custom_edition_cache_tag_name(tag_cache, loaded_bytes, tag_index), model->nodes.count);
 		}
 	}
+	custom_edition_models_default_inverses_remake(tag_cache, loaded_bytes);
 	tag_index = NONE;
 	while ((model = custom_edition_cache_tag_next(tag_cache, loaded_bytes, GBXMODEL_GROUP_TAG, sizeof(*model), &tag_index)) != NULL)
 	{
