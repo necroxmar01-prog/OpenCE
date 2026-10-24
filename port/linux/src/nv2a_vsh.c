@@ -19,6 +19,7 @@ clip-space position again.
 
 #include "xgpu.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 
 /* ---------- instruction fields */
@@ -386,6 +387,50 @@ static const char shader_prologue[] =
 	"	return vec4(1.0, max(s.x, 0.0), specular, 1.0);\n"
 	"}\n";
 
+/* whether the instruction takes the reciprocal (rcc or rcp) of temporary
+r12, the clip-space position (oPos) */
+static int reciprocal_of_position(const DWORD *instruction)
+{
+	unsigned long ilu = field(instruction, 1, 25, 3);
+
+	return (ilu == _ilu_rcc || ilu == _ilu_rcp) && field(instruction, 3, 28, 2) == _mux_temporary &&
+		((field(instruction, 2, 0, 2) << 2) | field(instruction, 3, 30, 2)) == 12;
+}
+
+int nv2a_vertex_shader_reciprocals(const DWORD *instructions, unsigned long instruction_count,
+	char *description, unsigned long size)
+{
+	static const char *const mux_names[] = { "?", "r", "v", "c" };
+	unsigned long length = 0;
+	unsigned long index;
+	int keeps = 0;
+
+	if (size)
+		description[0] = 0;
+	for (index = 0; index < instruction_count; index++)
+	{
+		const DWORD *instruction = instructions + index * 4;
+		unsigned long ilu = field(instruction, 1, 25, 3);
+		unsigned long mux = field(instruction, 3, 28, 2);
+		unsigned long register_index;
+
+		if (ilu != _ilu_rcc && ilu != _ilu_rcp)
+			continue;
+		if (reciprocal_of_position(instruction))
+			keeps = 1;
+		register_index = mux == _mux_temporary ?
+			((field(instruction, 2, 0, 2) << 2) | field(instruction, 3, 30, 2)) :
+			mux == _mux_input ? field(instruction, 1, 9, 4) : field(instruction, 1, 13, 8);
+		if (length + 24 < size)
+		{
+			length += (unsigned long)snprintf(description + length, size - length, "%s%lu:%s %s%lu",
+				length ? ", " : "", index, ilu == _ilu_rcc ? "rcc" : "rcp", mux_names[mux & 3], register_index);
+		}
+	}
+
+	return keeps;
+}
+
 char *nv2a_vertex_shader_to_glsl(const DWORD *instructions, unsigned long instruction_count,
 	unsigned long packed_attribute_mask, const struct nv2a_vertex_lighting *lighting)
 {
@@ -490,11 +535,12 @@ char *nv2a_vertex_shader_to_glsl(const DWORD *instructions, unsigned long instru
 		default: xgpu_text_append(&text, "\tilu = vec4(0.0);\n"); break;
 		}
 		/* the screen-space conversion takes the reciprocal of the clip-space
-		position's w (rcc of r12.w); keep the position it converts */
-		if (ilu == _ilu_rcc && field(instruction, 3, 28, 2) == _mux_temporary &&
-			((field(instruction, 2, 0, 2) << 2) | field(instruction, 3, 30, 2)) == 12)
+		position's w (rcc of r12.w; rcp in some programs); keep the position
+		it converts, the first time (a later reciprocal of r12 would read the
+		screen position the conversion left there) */
+		if (reciprocal_of_position(instruction))
 		{
-			xgpu_text_append(&text, "\tclip_position = oPos;\n\tclip_captured = true;\n");
+			xgpu_text_append(&text, "\tif (!clip_captured)\n\t{\n\t\tclip_position = oPos;\n\t\tclip_captured = true;\n\t}\n");
 		}
 
 		/* results are written only after both units have read their inputs */

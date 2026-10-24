@@ -105,6 +105,12 @@ lights the diffuse color for each pixel (nv2a_pixel_shader_key
 per_pixel_lighting). Returns a malloc'd string. */
 char *nv2a_vertex_shader_to_glsl(const DWORD *instructions, unsigned long instruction_count,
 	unsigned long packed_attribute_mask, const struct nv2a_vertex_lighting *lighting);
+/* each reciprocal (rcc, rcp) the program takes, "instruction:op source"
+into description (size bytes); whether one is of r12, whose position the
+GLSL keeps to hand OpenGL the clip-space position (else it is recovered from
+the screen position, which fails near the camera plane) */
+int nv2a_vertex_shader_reciprocals(const DWORD *instructions, unsigned long instruction_count,
+	char *description, unsigned long size);
 /* the fixed-function pipeline's vertex shader (the loading screen's draws):
 positions already in clip space. Returns a malloc'd string. */
 char *nv2a_fixed_function_glsl(void);

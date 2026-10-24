@@ -3172,6 +3172,39 @@ static BOOL words_equal(const void *a, const void *b, unsigned long size)
 	return difference == 0;
 }
 
+/* errors.c's: debug.txt */
+void write_to_error_file(char *string, unsigned char date);
+
+/* a program that keeps no clip-space position (its screen conversion's
+reciprocal is not of r12) is logged to debug.txt once, with its
+reciprocals: near the camera plane its vertices are recovered from the
+screen position, which can put them out at the vanishing point */
+static void vertex_shader_report(struct vertex_shader_object *program)
+{
+	static unsigned long reported_ids[64];
+	static int reported_count = 0;
+	char reciprocals[160];
+	char line[256];
+	int index;
+
+	for (index = 0; index < reported_count; index++)
+	{
+		if (reported_ids[index] == program->id)
+			return;
+	}
+	if (reported_count >= (int)(sizeof(reported_ids) / sizeof(reported_ids[0])))
+		return;
+	reported_ids[reported_count++] = program->id;
+	if (nv2a_vertex_shader_reciprocals(program->instructions, program->instruction_count, reciprocals,
+		sizeof(reciprocals)))
+	{
+		return;
+	}
+	snprintf(line, sizeof(line), "gpu: vertex shader %lu (%lu instructions) keeps no clip position; reciprocals: %s\r\n",
+		(unsigned long)program->id, (unsigned long)program->instruction_count, reciprocals[0] ? reciprocals : "none");
+	write_to_error_file(line, 1);
+}
+
 /* lit: the shader that hands the lighting's normal and position on
 (vertex_shader_object lit_shader) */
 static GLuint vertex_shader_get(struct vertex_shader_object *program, BOOL immediate, BOOL lit)
@@ -3186,6 +3219,7 @@ static GLuint vertex_shader_get(struct vertex_shader_object *program, BOOL immed
 			immediate ? 0 : device.vertex_shader->packed_mask, lit ? &program->lighting : NULL);
 
 		program->shaders_tried |= tried;
+		vertex_shader_report(program);
 		*shader = xgpu_compile_shader(GL_VERTEX_SHADER, source, "vertex");
 		if (debug_settings.dump_shaders)
 		{
