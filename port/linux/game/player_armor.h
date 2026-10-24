@@ -12,7 +12,7 @@ ARMOR, before a mission): player_armor.c.
 armor line, and the executable: opence-mods reads it to tell an older
 patched build, which lacks what newer mods need, from this one). One more
 with each patch to the mods' code. */
-#define PLAYER_ARMOR_PATCH_TEXT "opence-mods patch 21"
+#define PLAYER_ARMOR_PATCH_TEXT "opence-mods patch 22"
 
 /* what an armor puts on a player's unit: the biped (empty: the map's player
 unit), whether it wears the profile's colour, and the permutation of each
