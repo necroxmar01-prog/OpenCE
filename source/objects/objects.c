@@ -3443,6 +3443,103 @@ void object_translate(
 	return;
 }
 
+/* port: an animation graph's node, by its name (model_animations.c's
+animation_graph_node, 64 bytes) */
+struct object_graph_node_name
+{
+	char name[TAG_STRING_LENGTH+1];
+	byte rest[0x40 - (TAG_STRING_LENGTH+1)];
+};
+
+/* port: a model's nodes and its animation graph's are paired by index (each
+animation's node orientations are the model's nodes'). A definition whose
+graph's nodes are not its model's, by count or by name (a Custom Edition
+protected map's), is logged once: the counts, the base animations the
+model's nodes would not take, and each node whose names differ */
+static void object_definition_nodes_report(
+	long definition_index)
+{
+	static long reported_indices[256];
+	static long reported_count = 0;
+	struct object_definition *object_definition = object_definition_get(definition_index);
+	long model_index = object_definition->object.model.index;
+	long graph_index = object_definition->object.animation_graph.index;
+	struct model *model;
+	struct animation_graph *graph;
+	long node_count;
+	long differing_count = 0;
+	long refused_count = 0;
+	long base_count = 0;
+	long index;
+
+	if (model_index == NONE || graph_index == NONE)
+		return;
+	for (index = 0; index < reported_count; index++)
+	{
+		if (reported_indices[index] == definition_index)
+			return;
+	}
+	if (reported_count >= (long)NUMBEROF(reported_indices))
+		return;
+	reported_indices[reported_count++] = definition_index;
+
+	model = model_definition_get(model_index);
+	graph = animation_graph_definition_get(graph_index);
+	node_count = MAX(model->nodes.count, graph->nodes.count);
+	for (index = 0; index < node_count; index++)
+	{
+		char const *model_name = index < model->nodes.count ?
+			TAG_BLOCK_GET_ELEMENT(&model->nodes, index, struct model_node)->name : "";
+		char const *graph_name = index < graph->nodes.count ?
+			TAG_BLOCK_GET_ELEMENT(&graph->nodes, index, struct object_graph_node_name)->name : "";
+
+		if (strncmp(model_name, graph_name, TAG_STRING_LENGTH))
+			differing_count++;
+	}
+	for (index = 0; index < graph->animations.count; index++)
+	{
+		struct animation const *animation = TAG_BLOCK_GET_ELEMENT(&graph->animations, index, struct animation);
+
+		if (animation->type != _animation_base)
+			continue;
+		base_count++;
+		if (animation->node_count != model->nodes.count ||
+			(animation->node_list_checksum && model->node_list_checksum &&
+				animation->node_list_checksum != model->node_list_checksum))
+		{
+			refused_count++;
+		}
+	}
+	if (!differing_count && model->nodes.count == graph->nodes.count && !refused_count)
+		return;
+
+	error(
+		_error_silent,
+		"nodes: %s's model has %ld nodes (checksum %08lx), its animation graph %ld; %ld names differ by index; %ld of %ld base animations of other nodes",
+		tag_get_name(definition_index),
+		model->nodes.count,
+		(unsigned long)model->node_list_checksum,
+		graph->nodes.count,
+		differing_count,
+		refused_count,
+		base_count);
+	for (index = 0; index < node_count; index++)
+	{
+		struct model_node const *model_node = index < model->nodes.count ?
+			TAG_BLOCK_GET_ELEMENT(&model->nodes, index, struct model_node) : NULL;
+		char const *graph_name = index < graph->nodes.count ?
+			TAG_BLOCK_GET_ELEMENT(&graph->nodes, index, struct object_graph_node_name)->name : "";
+
+		error(
+			_error_silent,
+			"nodes:   %ld model '%.31s' (parent %d) animation '%.31s'",
+			index,
+			model_node ? model_node->name : "",
+			model_node ? model_node->parent_node_index : NONE,
+			graph_name);
+	}
+}
+
 long object_new(
 	struct object_placement_data *data)
 {
@@ -3484,6 +3581,7 @@ long object_new(
 		struct object_definition *object_definition = object_definition_get(definition_index);
 		struct object_type_definition *type_definition = object_type_definition_get(object_definition->object.type);
 
+		object_definition_nodes_report(definition_index);
 		object_index = object_header_new(object_header_data, network_objects_new_object_index(),
 			type_definition->game_datum_size);
 
