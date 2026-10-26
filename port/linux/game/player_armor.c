@@ -76,6 +76,7 @@ weapons, grenades, health and shields.
 #include "units/units.h"
 
 #include "player_armor.h"
+#include "mod_switches.h"
 #include "network_addons.h"
 #include "network_coop.h"
 
@@ -804,6 +805,9 @@ void player_armor_catalog_load(
 				error(_error_silent, "armor: %s.txt: the name is too long", id);
 				continue;
 			}
+			/* (turned off in the main menu's MODS: mod_switches.c) */
+			if (mod_switches_off(_mod_switch_armor, id))
+				continue;
 			if (player_armor_globals.count >= PLAYER_ARMOR_MAXIMUM_ARMORS)
 			{
 				error(_error_silent, "armor: more than %d armors; %s.txt left out", PLAYER_ARMOR_MAXIMUM_ARMORS, id);

@@ -32,6 +32,7 @@ host's weapon mods, which its players get from it (network_addons.c).
 #include "game/game_engine.h"
 
 #include "weapon_mods.h"
+#include "mod_switches.h"
 
 #include <xtl.h>
 #include <stdio.h>
@@ -241,6 +242,9 @@ short weapon_mods_read_all(
 			error(_error_silent, "weapon: %s.txt: the name is too long", id);
 			continue;
 		}
+		/* (turned off in the main menu's MODS: mod_switches.c) */
+		if (mod_switches_off(_mod_switch_weapon, id))
+			continue;
 		if (count >= maximum)
 		{
 			error(_error_silent, "weapon: more than %d weapon mods; %s.txt left out", maximum, id);

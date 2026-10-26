@@ -2542,6 +2542,9 @@ int port_mods_save(void);
 void port_mods_revert(void);
 /* (mods.c) */
 void mods_apply(void);
+/* opence-mods: the armors and weapon mods, rows below the mods folder's
+(mod_switches.c) */
+#include "mod_switches.h"
 
 static struct
 {
@@ -2573,21 +2576,67 @@ static struct widget_instance *mod_row(struct widget_instance *widget)
 	return NULL;
 }
 
+/* opence-mods: a row below the mods folder's mods is an armor's or a weapon
+mod's (mod_switches.c), its mod MOD_SWITCH_BASE and its index there: turned
+on or off as the others are, never moved (it has no place in the load
+order) */
+#define MOD_SWITCH_BASE 0x10000L
+
+/* the rows of the list: the mods folder's mods, then the armors and weapon
+mods */
+static short mods_list_count(void)
+{
+	return (short)(port_mods_count() + mod_switches_count());
+}
+
 /* the place on the list of the mod on a row, else NONE */
 static short mod_row_place(struct widget_instance *row)
 {
 	short place = row ? (short)(mods_screen.first + atoi(row->name + 7) - 1) : NONE;
 
-	return place >= 0 && place < port_mods_count() ? place : NONE;
+	return place >= 0 && place < mods_list_count() ? place : NONE;
 }
 
 /* the mod at a place on the list (its place in the load order counted from
-the end), else NONE */
+the end; below them, an armor's or a weapon mod's), else NONE */
 static long mod_at_place(short place)
 {
 	long count = port_mods_count();
 
-	return place >= 0 && place < count ? port_mods_at(count - 1 - place) : NONE;
+	if (place < 0)
+		return NONE;
+	if (place < count)
+		return port_mods_at(count - 1 - place);
+	return place < count + mod_switches_count() ? MOD_SWITCH_BASE + (place - count) : NONE;
+}
+
+/* a mod's name, whether it is on, what is wrong with it (an armor or a
+weapon mod: nothing) and its details, whichever the mod is */
+static char const *mods_list_name(long mod)
+{
+	return mod >= MOD_SWITCH_BASE ? mod_switches_name(mod - MOD_SWITCH_BASE) : port_mods_name(mod);
+}
+
+static int mods_list_on(long mod)
+{
+	return mod >= MOD_SWITCH_BASE ? mod_switches_on(mod - MOD_SWITCH_BASE) : port_mods_on(mod);
+}
+
+static int mods_list_status(long mod, char *text, unsigned long size)
+{
+	if (mod < MOD_SWITCH_BASE)
+		return port_mods_status(mod, text, size);
+	if (text && size)
+		text[0] = 0;
+	return _port_mod_fine;
+}
+
+static void mods_list_details(long mod, char *text, unsigned long size)
+{
+	if (mod >= MOD_SWITCH_BASE)
+		mod_switches_details(mod - MOD_SWITCH_BASE, text, size);
+	else
+		port_mods_details(mod, text, size);
 }
 
 /* UTF-8 text (mod.toml's) as the menus' (a line break the game's \r\n; a
@@ -2739,6 +2788,7 @@ static boolean mods_screen_reset(void)
 	short index;
 
 	port_mods_revert();
+	mod_switches_revert();
 	mods_screen.first = 0;
 	mods_screen.chosen = 0;
 	mods_screen.shown[0] = 0;
@@ -2761,7 +2811,9 @@ static boolean mods_toggle(struct widget_instance *widget)
 
 	if (place == NONE)
 		return FALSE;
-	if (port_mods_status(mod, NULL, 0) != _port_mod_unplayable)
+	if (mod >= MOD_SWITCH_BASE)
+		mod_switches_turn(mod - MOD_SWITCH_BASE, !mod_switches_on(mod - MOD_SWITCH_BASE));
+	else if (port_mods_status(mod, NULL, 0) != _port_mod_unplayable)
 		port_mods_turn(mod, !port_mods_on(mod));
 	return TRUE;
 }
@@ -2777,8 +2829,8 @@ static boolean mods_move(struct widget_instance *widget, short places)
 	short place = row ? mod_row_place(row) : mods_screen.chosen;
 	short moved;
 
-	/* (no mods: nothing to move) */
-	if (!count)
+	/* (no mods: nothing to move; an armor or a weapon mod stays where it is) */
+	if (!count || (place != NONE && place >= count && place < mods_list_count()))
 		return TRUE;
 	if (place == NONE || place >= count)
 		return FALSE;
@@ -2810,8 +2862,8 @@ static void mods_details_show(struct widget_instance *details, short place, shor
 	char shown[sizeof(mods_screen.shown)];
 
 	/* (wrapped again only when what they show, or its fonts, change) */
-	snprintf(shown, sizeof(shown), "%ld %d %d %d %d %ld %d %ld %d", mod, port_mods_status(mod, NULL, 0),
-		port_mods_on(mod), place, count, mods_screen.fonts[_mod_details_name],
+	snprintf(shown, sizeof(shown), "%ld %d %d %d %d %ld %d %ld %d", mod, mods_list_status(mod, NULL, 0),
+		mods_list_on(mod), place, count, mods_screen.fonts[_mod_details_name],
 		mods_screen.widths[_mod_details_name], mods_screen.fonts[_mod_details_text],
 		mods_screen.widths[_mod_details_text]);
 	if (!strcmp(shown, mods_screen.shown))
@@ -2833,9 +2885,9 @@ static void mods_details_show(struct widget_instance *details, short place, shor
 		visible_set(icon, FALSE);
 		return;
 	}
-	status = port_mods_status(mod, problem, sizeof(problem));
+	status = mods_list_status(mod, problem, sizeof(problem));
 	text[0] = 0;
-	mods_wrap(port_mods_name(mod), text, sizeof(text), _mod_details_name, 2, 0);
+	mods_wrap(mods_list_name(mod), text, sizeof(text), _mod_details_name, 2, 0);
 	mods_wide_text(text, wide, NUMBEROF(wide));
 	text_set_length(named(details, "mod_details_name", 0), wide, NUMBEROF(wide));
 	visible_set(icon, status != _port_mod_fine);
@@ -2852,11 +2904,15 @@ static void mods_details_show(struct widget_instance *details, short place, shor
 		line = mods_wrap(problem, text, sizeof(text), _mod_details_text, MOD_DETAILS_LINES, line);
 		line = mods_wrap(" ", text, sizeof(text), _mod_details_text, MOD_DETAILS_LINES, line);
 	}
-	snprintf(about, sizeof(about), "%s\nPriority: %d of %d", status == _port_mod_unplayable ? "Cannot be played" :
-		port_mods_on(mod) ? "On" : "Off", place + 1, count);
-	line = mods_wrap(about, text, sizeof(text), _mod_details_text, MOD_DETAILS_LINES, line);
-	line = mods_wrap(" ", text, sizeof(text), _mod_details_text, MOD_DETAILS_LINES, line);
-	port_mods_details(mod, about, sizeof(about));
+	/* (an armor or a weapon mod: no priority, its details say what it does) */
+	if (mod < MOD_SWITCH_BASE)
+	{
+		snprintf(about, sizeof(about), "%s\nPriority: %d of %ld", status == _port_mod_unplayable ? "Cannot be played" :
+			port_mods_on(mod) ? "On" : "Off", place + 1, port_mods_count());
+		line = mods_wrap(about, text, sizeof(text), _mod_details_text, MOD_DETAILS_LINES, line);
+		line = mods_wrap(" ", text, sizeof(text), _mod_details_text, MOD_DETAILS_LINES, line);
+	}
+	mods_list_details(mod, about, sizeof(about));
 	mods_wrap(about, text, sizeof(text), _mod_details_text, MOD_DETAILS_LINES, line);
 	mods_wide_text(text, wide, NUMBEROF(wide));
 	text_set_length(named(details, "mod_details_text", 0), wide, NUMBEROF(wide));
@@ -2871,7 +2927,7 @@ static void mods_update(struct widget_instance *list)
 {
 	struct widget_instance *row;
 	struct widget_instance *focused = mod_row(list->focused_child);
-	short count = (short)port_mods_count();
+	short count = mods_list_count();
 	short focused_index = focused ? (short)(atoi(focused->name + 7) - 1) : NONE;
 
 	if (focused_index == MOD_ROWS - 1 && mods_screen.first + MOD_ROWS < count && list_scrolls_at_end())
@@ -2910,12 +2966,12 @@ static void mods_update(struct widget_instance *list)
 			continue;
 		}
 		mod = mod_at_place(place);
-		status = port_mods_status(mod, NULL, 0);
+		status = mods_list_status(mod, NULL, 0);
 		row_index = (short)PIN(atoi(row->name + 7) - 1, 0, MOD_ROWS - 1);
 		if (mods_screen.row_mods[row_index] != mod ||
 			mods_screen.row_fonts[row_index] != mods_screen.fonts[_mod_row_name])
 		{
-			char const *name = port_mods_name(mod);
+			char const *name = mods_list_name(mod);
 			char shortened[MOD_DETAILS_LENGTH];
 			wchar_t wide[ROW_TEXT_LENGTH];
 
@@ -2928,7 +2984,7 @@ static void mods_update(struct widget_instance *list)
 			mods_screen.row_mods[row_index] = mod;
 			mods_screen.row_fonts[row_index] = mods_screen.fonts[_mod_row_name];
 		}
-		text_set(named(row, "mod_state", 0), port_mods_on(mod) ? L"ON" : L"OFF");
+		text_set(named(row, "mod_state", 0), mods_list_on(mod) ? L"ON" : L"OFF");
 		icon = named(row, "mod_status", 0);
 		visible_set(icon, status != _port_mod_fine);
 		if (icon)
@@ -2942,6 +2998,7 @@ what it cannot write until the game quits) */
 static boolean mods_save(void)
 {
 	port_mods_save();
+	mod_switches_save();
 	mods_apply();
 	return TRUE;
 }
