@@ -75,19 +75,25 @@ byte), so that neither joins the other's games, and the player is told why
 they send (1: every player's camera; 2: 24 addons a set, several weapon
 mods of one addon: network_addons.c; 3: upstream's text chat, its
 messages 87 to 89, the mods' moved to 90 to 92; 4: upstream's aim assist
-and shield effects took 90 and 91, the mods' moved to 120 to 122) */
+and shield effects took 90 and 91, the mods' moved to 120 to 122; upstream
+went on to 41, the mods' revision stays 4) */
 #define HALO_PORT_NETWORK_VERSION_MODS 0x4000
-#define HALO_PORT_NETWORK_VERSION 17444 /* 36 | 4 << 8 | HALO_PORT_NETWORK_VERSION_MODS */
+#define HALO_PORT_NETWORK_VERSION 17449 /* 41 | 4 << 8 | HALO_PORT_NETWORK_VERSION_MODS */
 /* ... the advertisement's reserved bytes: the version (a little-endian word),
-then flags */
+then flags, then the game's kind (an OpenCE gametype's mode, and Hardcore:
+port/linux/game/game_modes.h's game_modes_kind), for the server browser */
 #define HALO_PORT_ADVERTISED_VERSION_OFFSET 0
 #define HALO_PORT_ADVERTISED_FLAGS_OFFSET 2
+#define HALO_PORT_ADVERTISED_KIND_OFFSET 3
 /* ... the host plays the distributed netcode (always, since the lockstep
 netcode was removed; hosts of version 4 built before then may not) */
 #define HALO_PORT_ADVERTISED_DISTRIBUTED_FLAG 0x01
 /* ... the game is under way (loading, playing or over), not in its lobby:
 the menus show it before joining it (hosts built before then never set it) */
 #define HALO_PORT_ADVERTISED_IN_PROGRESS_FLAG 0x02
+/* ... the host is a dedicated server, with no player of its own (halo
+--server: port/linux/src/server_mode.c): the menus say so (from version 39) */
+#define HALO_PORT_ADVERTISED_DEDICATED_FLAG 0x04
 
 /* a message header's 12-bit length allows messages of up to 0xFFF bytes,
 header included; the per-tick update of 128 players is 3,857 */

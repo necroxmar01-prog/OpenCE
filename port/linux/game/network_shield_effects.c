@@ -2,9 +2,11 @@
 glow, as far as it reaches, and the overshield effect are the host's choice,
 for every machine, so that no player sees what another does not. Offline,
 each player's own (display.shield_glow, display.shield_glow_intensity,
-display.overshield_effect). The host sends its choice to each client
-reliably when it is ready and when it changes; until it arrives, a client
-draws the stock game's. */
+display.overshield_effect), and online too when the host chooses "players"
+(each player's own, not synced), and in an online co-op game, whatever the
+host chooses: the players play together, and what each draws gives nobody an
+edge. The host sends its choice to each client reliably when it is ready and
+when it changes; until it arrives, a client draws the stock game's. */
 #include "cseries.h"
 #include "game/game.h"
 #include "interface/ui_widget.h"
@@ -12,6 +14,7 @@ draws the stock game's. */
 #include "networking/network_game_globals.h"
 #include "network_distributed.h"
 #include "network_shield_effects.h"
+#include "network_coop.h"
 #include <string.h>
 
 char const *config_string(char const *name);
@@ -19,7 +22,7 @@ unsigned long config_changes(void);
 
 static char const *const shield_effects_names[NUMBER_OF_SHIELD_EFFECTS] =
 {
-	"stock", "glow", "light_show", "overshield", "glow_overshield", "light_show_overshield"
+	"stock", "glow", "light_show", "overshield", "glow_overshield", "light_show_overshield", "players"
 };
 static short client_effects = _shield_effects_stock;
 static short sent_effects = NONE;
@@ -61,14 +64,19 @@ void network_shield_effects_reset(void)
 }
 
 /* the effects drawn: the host's in a network game, NONE (each player's own
-settings) otherwise */
+settings) otherwise, in an online co-op game, or when the host leaves them to
+each player */
 short network_shield_effects(void)
 {
+	short effects = NONE;
+
+	if (network_coop_active())
+		return NONE;
 	if (game_connection() == _game_connection_network_server)
-		return host_effects();
-	if (game_connection() == _game_connection_network_client)
-		return client_effects;
-	return NONE;
+		effects = host_effects();
+	else if (game_connection() == _game_connection_network_client)
+		effects = client_effects;
+	return effects == _shield_effects_players ? NONE : effects;
 }
 
 static void shield_effects_message_make(struct shield_effects_message *message, short effects)
