@@ -333,9 +333,10 @@ The opence-mods builds (the fork's branch of that name) add co-op's addons,
 armors and players' cameras to what the machines send, and play only with
 each other: their version is upstream's, with the branch's revision of its
 messages above it and bit 14 set (`HALO_PORT_NETWORK_VERSION_MODS`), so
-version 17444 is upstream's 36, revision 4. Their message kinds are 120 to
-122, past upstream's, which took the mods' earlier ones twice (the text
-chat 87 to 89, the aim assist policy and shield effects 90 and 91).
+version 17449 is upstream's 41, revision 4 (17444 was upstream's 36, the
+same revision). Their message kinds are 120 to 122, past upstream's, which
+took the mods' earlier ones twice (the text chat 87 to 89, the aim assist
+policy and shield effects 90 and 91) and now end at 95.
 
 `port/linux/network_format.txt` records the wire format of the current
 version (`tools/network_format.py`): `test_linux_port.py` fails when the

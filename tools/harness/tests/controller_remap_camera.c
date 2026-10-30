@@ -37,6 +37,12 @@ static void editor_camera_update(void) {}
 static void orbiting_camera_update(void) {}
 static void first_person_camera_update(void) {}
 static void following_camera_update(void) {}
+/* (opence-mods: director.c's on-foot test, first person or over the
+shoulder; the harness has no shoulder camera) */
+static boolean director_on_foot_camera(director_camera_update_proc proc)
+{
+    return proc == (director_camera_update_proc)first_person_camera_update;
+}
 static struct director camera;
 static struct gamepad_state pad;
 static struct { short local_player_index; } player = {2};

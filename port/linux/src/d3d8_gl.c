@@ -5971,81 +5971,6 @@ static void web_chunks_begin_frame(void)
 }
 #endif
 
-#if defined(HALO_GLES) && !defined(HALO_WEB)
-/* port (opence-mods): on the chips that stream into the frame's ring
-buffers (stream_uses_chunks off: not Snapdragon, whose pooled buffers take
-any size), a frame that streams more than its ring buffer holds
-(a Custom Edition map's dense scenes: Takeback's, drawn with every model's
-vertices and indices streamed, the mirror being off here) goes on into
-buffers of its own, one after another. Orphaning the ring buffer instead
-did not give its writes new storage: host_gl_buffer_write maps without
-synchronizing, so the frame's later vertices and indices went over ones the
-GPU had yet to draw, and earlier draws took them - triangles joining
-other models' vertices, stretched across the screen. Each ring slot keeps
-its own extras, written again only after host_gl_wait_frame releases the
-slot, as its ring buffer is. */
-#define STREAM_OVERFLOW_BUFFERS 32
-
-static struct
-{
-	GLuint buffers[2][STREAM_BUFFER_RING][STREAM_OVERFLOW_BUFFERS];
-	/* this frame's extras in use, of vertices and of indices */
-	unsigned long used[2];
-	/* the most a frame has used, as logged */
-	unsigned long logged[2];
-} stream_overflow;
-
-/* the frame's next buffer of vertices (indices 0) or indices (1), bound,
-its offset 0; FALSE when the frame has used them all */
-static BOOL stream_overflow_next(int indices)
-{
-	unsigned long *used = &stream_overflow.used[indices];
-	GLuint *buffer;
-
-	if (*used >= STREAM_OVERFLOW_BUFFERS)
-		return FALSE;
-	buffer = &stream_overflow.buffers[indices][device.buffer_ring][*used];
-	if (!*buffer)
-	{
-		glGenBuffers(1, buffer);
-		if (indices)
-		{
-			state_element_array_buffer(*buffer);
-			glBufferData(GL_ELEMENT_ARRAY_BUFFER, INDEX_BUFFER_SIZE, NULL, GL_STREAM_DRAW);
-		}
-		else
-		{
-			state_array_buffer(*buffer);
-			glBufferData(GL_ARRAY_BUFFER, STREAM_BUFFER_SIZE, NULL, GL_STREAM_DRAW);
-		}
-	}
-	(*used)++;
-	if (indices)
-	{
-		device.index_buffer = *buffer;
-		device.index_offset = 0;
-		state_element_array_buffer(*buffer);
-	}
-	else
-	{
-		device.stream_buffer = *buffer;
-		device.stream_offset = 0;
-		state_array_buffer(*buffer);
-	}
-	if (*used > stream_overflow.logged[indices])
-	{
-		char line[200];
-
-		stream_overflow.logged[indices] = *used;
-		snprintf(line, sizeof(line), "gpu: a frame streamed more than %lu MB of %s: %lu more buffers of them\r\n",
-			(indices ? (unsigned long)INDEX_BUFFER_SIZE : (unsigned long)STREAM_BUFFER_SIZE) >> 20,
-			indices ? "indices" : "vertices", *used);
-		write_to_error_file(line, 1);
-	}
-	return TRUE;
-}
-#endif
-
 /* makes room for size bytes of uploads, orphaning the stream buffer if it
 is full. A draw reserves room for all of its streams at once: orphaning
 between two of them would leave the attributes already pointed at the
@@ -6067,10 +5992,6 @@ static void stream_reserve(unsigned long size)
 #endif
 	if (device.stream_offset + size > STREAM_BUFFER_SIZE)
 	{
-#if defined(HALO_GLES)
-		if (stream_overflow_next(0))
-			return;
-#endif
 		/* orphan the buffer and start again */
 		state_array_buffer(device.stream_buffer);
 		glBufferData(GL_ARRAY_BUFFER, STREAM_BUFFER_SIZE, NULL, GL_STREAM_DRAW);
@@ -6187,13 +6108,8 @@ static unsigned long index_upload(const void *data, unsigned long size)
 		state_element_array_buffer(device.index_buffer);
 		if (device.index_offset + size > INDEX_BUFFER_SIZE)
 		{
-#if defined(HALO_GLES)
-			if (!stream_overflow_next(1))
-#endif
-			{
-				glBufferData(GL_ELEMENT_ARRAY_BUFFER, INDEX_BUFFER_SIZE, NULL, GL_STREAM_DRAW);
-				device.index_offset = 0;
-			}
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, INDEX_BUFFER_SIZE, NULL, GL_STREAM_DRAW);
+			device.index_offset = 0;
 		}
 	}
 	offset = device.index_offset;
@@ -7880,6 +7796,7 @@ static void frame_pacing_wait(void)
 }
 #endif
 
+
 void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destination_rectangle,
 	void *unused, void *unused2)
 {
@@ -8002,10 +7919,6 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		device.stream_offset = 0;
 		device.index_offset = 0;
 		web_chunks_begin_frame();
-#ifndef HALO_WEB
-		stream_overflow.used[0] = 0;
-		stream_overflow.used[1] = 0;
-#endif
 #else
 		device.stream_offset = STREAM_BUFFER_SIZE; /* orphan next frame */
 		device.index_offset = INDEX_BUFFER_SIZE;
